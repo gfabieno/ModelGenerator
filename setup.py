@@ -16,6 +16,7 @@ setup(name='ModelGenerator',
       install_requires=['argparse',
                         'numpy',
                         'h5py',
-                        'scipy'
+                        'scipy',
+                        'prettyTable'
                         ],
       zip_safe=False)

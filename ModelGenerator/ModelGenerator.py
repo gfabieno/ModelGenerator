@@ -426,10 +426,7 @@ class Sequence(object):
 
         self.thick_max = thick_max
         self.thick_min = thick_min
-        if deform is None:
-            self.deform = Deformation()
-        else:
-            self.deform = deform
+        self.deform = deform
 
     def __iter__(self):
         self.n = 0

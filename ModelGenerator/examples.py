@@ -15,20 +15,10 @@ def random1D():
     gen = ModelGenerator()
     gen.layer_dh_min = 20
     gen.num_layers = 0
-    gen.marine = True
-    gen.water_dmin = 100
-    gen.water_dmax = 1000
-    gen.vp_trend_min = 0
-    gen.vp_trend_max = 2
 
-    vp = Property(name="vp", vmin=gen.vp_min, vmax=gen.vp_max,
-                  trend_max=gen.vp_trend_max, trend_min=gen.vp_trend_min)
+    vp = Property(name="vp", vmin=1000, vmax=5000)
     strati = Stratigraphy(defaultprops=[vp])
 
-    # Maximum nb of frequencies of boundary
-    gen.max_deform_nfreq = 0
-    # Probability that a boundary shape will change
-    gen.prob_deform_change = 0.7
     gen.dip_max = 0
     gen.max_texture = 0
 
@@ -48,28 +38,21 @@ def random2D():
     gen = ModelGenerator()
     gen.layer_dh_min = 20
     gen.num_layers = 0
-    gen.marine = True
-    gen.water_dmin = 100
-    gen.water_dmax = 1000
-    gen.vp_trend_min = 0
-    gen.vp_trend_max = 2
 
-    vp = Property(name="vp", vmin=gen.vp_min, vmax=gen.vp_max,
-                  trend_max=gen.vp_trend_max, trend_min=gen.vp_trend_min)
-    strati = Stratigraphy(defaultprops=[vp])
 
-    # Max frequency of the layer boundary function
-    gen.max_deform_freq = 0.1
-    # Min frequency of the layer boundary function
-    gen.min_deform_freq = 0.0001
-    # Maximum amplitude of boundary deformations
-    gen.amp_max = 26
-    # Maximum nb of frequencies of boundary
-    gen.max_deform_nfreq = 40
-    # Probability that a boundary shape will change
-    gen.prob_deform_change = 0.7
+    vp = Property(name="vp", vmin=1000, vmax=5000)
+    lith = Lithology(name='vp', properties=[vp])
+    deform = Deformation(max_deform_freq=0.1,
+                         min_deform_freq=0.0001,
+                         amp_max=26,
+                         max_deform_nfreq=40,
+                         prob_deform_change=0.7)
+    sequence = Sequence(lithologies=[lith],
+                        ordered=False,
+                        deform=deform)
+    strati = Stratigraphy(sequences=[sequence])
+
     gen.dip_max = 20
-
     gen.num_layers = 0
     gen.layer_num_min = 5
     gen.layer_dh_min = 10
@@ -77,6 +60,7 @@ def random2D():
     props2D, layerids, layers = gen.generate_model(strati)
     plt.imshow(props2D[0])
     plt.show()
+    strati.summary()
 
 def fixed2d():
     """
@@ -104,11 +88,19 @@ def fixed2d():
     q = Property("q", vmin=60, vmax=60, texture=30)
     frozen_sands = Lithology(name=name, properties=[vp, vs, rho, q])
 
+    deform = Deformation(max_deform_freq=0.02,
+                         min_deform_freq=0.0001,
+                         amp_max=3,
+                         max_deform_nfreq=40,
+                         prob_deform_change=0.4)
+
     sequence = Sequence(lithologies=[water,
                                      unfrozen_sediments,
                                      frozen_sands,
                                      unfrozen_sediments],
-                        ordered=True)
+                        ordered=True,
+                        deform=deform)
+
     thicks = [25, 25, 100, 50]
     angles = [-0.2, 0.5, 0, 1]
     strati = Stratigraphy(sequences=[sequence])
@@ -119,12 +111,6 @@ def fixed2d():
 
     gen.texture_xrange = 3
     gen.texture_zrange = 1.95 * gen.NZ / 2
-
-    gen.max_deform_freq = 0.02
-    gen.min_deform_freq = 0.0001
-    gen.amp_max = 3
-    gen.max_deform_nfreq = 40
-    gen.prob_deform_change = 0.4
 
     (vp, vs, rho, qp), _, _ = gen.generate_model(strati, thicks=thicks,
                                                  dips=angles)
@@ -250,7 +236,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--name",
         type=str,
-        default="random_sequences",
+        default="random2d",
         help="Name of the example to display"
     )
     # Parse the input for training parameters
@@ -259,7 +245,7 @@ if __name__ == "__main__":
     if args.name == "random1d":
         random1D()
     elif args.name == "random2d":
-        random1D()
+        random2D()
     elif args.name == "fixed2d":
         fixed2d()
     elif args.name == "random_sequences":

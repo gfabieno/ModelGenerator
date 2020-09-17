@@ -11,6 +11,7 @@ import h5py as h5
 from prettytable import PrettyTable
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
+import copy
 
 def random_fields(nf, nz, nx, lz=2, lx=2, corr=None):
     """
@@ -320,7 +321,8 @@ def gridded_model(nx, nz, layers, lz, lx, corr):
 class Property(object):
 
     def __init__(self, name="Default", vmin=1000, vmax=5000, texture=0,
-                 trend_min=0, trend_max=0, gradx_min=0, gradx_max=0):
+                 trend_min=0, trend_max=0, gradx_min=0, gradx_max=0,
+                 dzmax=None):
         """
         A Property is used to describe one material property of a Lithology
         object, and provides the maximum and minimum value that can take
@@ -336,6 +338,8 @@ class Property(object):
         :param trend_max: Maximum value of the linear trend in z within a layer
         :param gradx_min: Minimum value of the linear trend in x within a layer
         :param gradx_max: Maximum value of the linear trend in x within a layer
+        :param dzmax: Maximum change between two consecutive layers with
+                      the same lithology
         """
 
         self.name = name
@@ -346,10 +350,7 @@ class Property(object):
         self.trend_max = trend_max
         self.gradx_min = gradx_min
         self.gradx_max = gradx_max
-
-    def get_value(self):
-        return self.min + np.random.rand() * (self.max - self.min)
-
+        self.dzmax = dzmax
 
 class Lithology(object):
 
@@ -457,7 +458,7 @@ class Sequence(object):
 
 class Layer(object):
 
-    def __init__(self, idnum, thick, dip, sequence, lithology,
+    def __init__(self, idnum, thick, dip, sequence, lithology, properties,
                        boundary=None, gradx=None):
         """
         A Layer object describes a specific layer within a model, providing a
@@ -469,6 +470,7 @@ class Layer(object):
         :param dip: The dip of the layer
         :param sequence: A Sequence object to which the layer belongs
         :param lithology: A Lithology object to which the layer belongs
+        :param properties: A list of value of the layer properties
         :param boundary: An array of the position of the top of the layer
         :param gradx: A list of horizontal increase of each property
         """
@@ -478,7 +480,7 @@ class Layer(object):
         self.dip = dip
         self.sequence = sequence
         self.lithology = lithology
-        self.properties = [prop.get_value() for prop in lithology]
+        self.properties = properties
         names = [prop.name for prop in lithology]
         for name, prop in zip(names, self.properties):
             setattr(self, name, prop)
@@ -522,6 +524,8 @@ class Stratigraphy(object):
                       for s in self.sequences]
         seq_thicks[-1] = 1e09
         seq = self.sequences[0]
+        lith = None
+        properties = [0.0 for _ in self.sequences[0].lithologies[0]]
         for ii, (t, di) in enumerate(zip(thicks, dips)):
             seqthick += t
             if seqthick > seq_thicks[seqid]:
@@ -530,6 +534,7 @@ class Stratigraphy(object):
                     seqiter = iter(self.sequences[seqid])
                     seq = self.sequences[seqid]
 
+            lith0 = lith
             lith = next(seqiter)
             if gradxs is None:
                 gradx = None
@@ -541,7 +546,17 @@ class Stratigraphy(object):
             else:
                 gradx = gradxs[ii]
 
-            layers.append(Layer(ii, t, di, seq, lith, gradx=gradx))
+            for jj, prop in enumerate(lith):
+                if prop.dzmax is not None and lith0 == lith:
+                    amp = 2 * prop.dzmax
+                    minval = properties[jj] - prop.dzmax
+                else:
+                    minval = prop.min
+                    amp = (prop.max - prop.min)
+                properties[jj] = minval + np.random.rand() * amp
+
+            layers.append(Layer(ii, t, di, seq, lith, gradx=gradx,
+                                properties=copy.copy(properties)))
 
         self.layers = layers
 
@@ -648,6 +663,7 @@ class ModelGenerator:
 
         self.thick0min = None
         self.thick0max = None
+        self.layers = None
 
     def save_parameters_to_disk(self, filename):
         """
@@ -726,7 +742,7 @@ class ModelGenerator:
                                           self.texture_zrange,
                                           self.texture_xrange,
                                           self.corr)
-
+        self.layers = layers
         return props2D, layerids, layers
 
     def animated_dataset(self, *args, **kwargs):

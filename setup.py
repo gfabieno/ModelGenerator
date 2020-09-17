@@ -17,6 +17,7 @@ setup(name='ModelGenerator',
                         'numpy',
                         'h5py',
                         'scipy',
-                        'prettyTable'
+                        'prettyTable',
+                        'matplotlib'
                         ],
       zip_safe=False)

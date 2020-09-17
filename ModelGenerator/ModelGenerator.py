@@ -9,6 +9,8 @@ import numpy as np
 from scipy.signal import gaussian
 import h5py as h5
 from prettytable import PrettyTable
+import matplotlib.pyplot as plt
+import matplotlib.animation as animation
 
 def random_fields(nf, nz, nx, lz=2, lx=2, corr=None):
     """
@@ -501,7 +503,7 @@ class Stratigraphy(object):
         self.sequences = sequences
         self.layers = None
 
-    def build_stratigraphy(self, thicks, dips, boundaries=None, gradxs=None):
+    def build_stratigraphy(self, thicks, dips, gradxs=None):
         """
         Generate a sequence of Layer object that provides properties of each
         layer in a stratigraphic column.
@@ -509,8 +511,6 @@ class Stratigraphy(object):
         :param nx: size in x of the grid
         :param thicks: A list of layer thicknesses
         :param dips: A list of layer dips
-        :param boundaries: A list of 1D array providing position of the top
-                           of a layer
         :return:
         """
 
@@ -540,12 +540,8 @@ class Stratigraphy(object):
                     gradxs[n] = prop.gradx_min + np.random() * amp
             else:
                 gradx = gradxs[ii]
-            if boundaries is not None:
-                boundary = boundaries[ii]
-            else:
-                boundary = None
-            layers.append(Layer(ii, t, di, seq, lith, gradx=gradx,
-                                boundary=boundary))
+
+            layers.append(Layer(ii, t, di, seq, lith, gradx=gradx))
 
         self.layers = layers
 
@@ -601,7 +597,7 @@ class Deformation():
             for ii in range(nfreqs):
                 deform += amps[ii] * np.sin(freqs[ii] * x + phases[ii])
 
-            ddeform = np.max(deform)
+            ddeform = np.max(np.abs(deform))
             if ddeform > 0:
                 deform = deform / ddeform * self.amp_max * np.random.rand()
 
@@ -722,10 +718,10 @@ class ModelGenerator:
             dips = random_dips(len(thicks), self.dip_max,
                                self.ddip_max, dip_0=self.dip_0)
 
-        layers = stratigraphy.build_stratigraphy(thicks, dips, boundaries,
-                                                 gradxs=gradxs)
+        layers = stratigraphy.build_stratigraphy(thicks, dips, gradxs=gradxs)
         if boundaries is None:
             layers = generate_random_boundaries(self.NX, layers)
+
         props2D, layerids = gridded_model(self.NX, self.NZ, layers,
                                           self.texture_zrange,
                                           self.texture_xrange,
@@ -733,5 +729,51 @@ class ModelGenerator:
 
         return props2D, layerids, layers
 
+    def animated_dataset(self, *args, **kwargs):
+        """
+        Produces an animation of a dataset, showing the input data, and the
+        different labels for each example.
+
+        @params:
+        phase (str): Which dataset: either train, test or validate
+        """
+
+        toplots, _, layers = self.generate_model(*args, **kwargs)
+        names = [prop.name for prop in layers[0].lithology]
+        minmax = [[np.inf, -np.inf] for _ in layers[0].lithology]
+        for layer in layers:
+            for ii, prop in enumerate(layer.lithology):
+                if minmax[ii][0] > prop.min:
+                    minmax[ii][0] = prop.min
+                if minmax[ii][1] < prop.max:
+                    minmax[ii][1] = prop.max
+
+        fig, axs = plt.subplots(1, len(toplots), figsize=[16, 8], squeeze=False)
+        axs = axs.flatten()
+        ims = [axs[ii].imshow(toplots[ii], animated=True, aspect='auto',
+                                 cmap='inferno', vmin=minmax[ii][0],
+                                 vmax=minmax[ii][1])
+               for ii in range(len(toplots))]
+
+        for ii, ax in enumerate(axs):
+            ax.set_title(names[ii])
+            plt.colorbar(ims[ii], ax=ax, orientation="horizontal", pad=0.05,
+                         fraction=0.2)
+        plt.tight_layout()
+
+        def init():
+            for im, toplot in zip(ims, toplots):
+                im.set_array(toplot)
+            return ims
+
+        def animate(t):
+            toplots, _, layers = self.generate_model(*args, **kwargs)
+            for im, toplot in zip(ims, toplots):
+                im.set_array(toplot)
+            return ims
+
+        _ = animation.FuncAnimation(fig, animate, init_func=init, frames=1000,
+                                    interval=3000, blit=True, repeat=True)
+        plt.show()
 
 

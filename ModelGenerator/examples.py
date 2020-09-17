@@ -26,9 +26,7 @@ def random1D():
     gen.layer_num_min = 5
     gen.layer_dh_min = 10
 
-    props2D, layerids, layers = gen.generate_model(strati)
-    plt.imshow(props2D[0])
-    plt.show()
+    gen.animated_dataset(strati)
 
 def random2D():
     """
@@ -46,7 +44,7 @@ def random2D():
                          min_deform_freq=0.0001,
                          amp_max=26,
                          max_deform_nfreq=40,
-                         prob_deform_change=0.7)
+                         prob_deform_change=0.2)
     sequence = Sequence(lithologies=[lith],
                         ordered=False,
                         deform=deform)
@@ -57,10 +55,7 @@ def random2D():
     gen.layer_num_min = 5
     gen.layer_dh_min = 10
     gen.NT = 2000
-    props2D, layerids, layers = gen.generate_model(strati)
-    plt.imshow(props2D[0])
-    plt.show()
-    strati.summary()
+    gen.animated_dataset(strati)
 
 def fixed2d():
     """
@@ -211,20 +206,22 @@ def random_sequences():
     gen.layer_dh_min = 5
     gen.layer_dh_max = 20
 
-    (vp, vs, rho, qp), _, _ = gen.generate_model(strati)
+    gen.animated_dataset(strati)
 
-    fig, axs = plt.subplots(1, 4)
-    im = axs[0].imshow(vp, aspect="auto")
-    fig.colorbar(im, ax=axs[0], orientation='horizontal')
-    im = axs[1].imshow(vp/vs, aspect="auto")
-    fig.colorbar(im, ax=axs[1], orientation='horizontal')
-    im = axs[2].imshow(rho, aspect="auto")
-    fig.colorbar(im, ax=axs[2], orientation='horizontal')
-    im = axs[3].imshow(qp, aspect="auto")
-    fig.colorbar(im, ax=axs[3], orientation='horizontal')
-    plt.show()
-
-    strati.summary()
+    # (vp, vs, rho, qp), _, _ = gen.generate_model(strati)
+    #
+    # fig, axs = plt.subplots(1, 4)
+    # im = axs[0].imshow(vp, aspect="auto")
+    # fig.colorbar(im, ax=axs[0], orientation='horizontal')
+    # im = axs[1].imshow(vp/vs, aspect="auto")
+    # fig.colorbar(im, ax=axs[1], orientation='horizontal')
+    # im = axs[2].imshow(rho, aspect="auto")
+    # fig.colorbar(im, ax=axs[2], orientation='horizontal')
+    # im = axs[3].imshow(qp, aspect="auto")
+    # fig.colorbar(im, ax=axs[3], orientation='horizontal')
+    # plt.show()
+    #
+    # strati.summary()
 
 
 if __name__ == "__main__":
@@ -236,7 +233,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--name",
         type=str,
-        default="random2d",
+        default="random_sequences",
         help="Name of the example to display"
     )
     # Parse the input for training parameters

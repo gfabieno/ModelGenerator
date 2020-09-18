@@ -3,9 +3,12 @@
 """
     Examples using the ModelGenerator class
 """
-from ModelGenerator import ModelGenerator, Property, Stratigraphy, Lithology, Sequence, Deformation
+from ModelGenerator import (ModelGenerator, Property, Stratigraphy, Lithology,
+                            Sequence, Deformation)
 import argparse
 import matplotlib.pyplot as plt
+import numpy as np
+
 
 def random1D():
     """
@@ -28,15 +31,12 @@ def random1D():
 
     gen.animated_dataset(strati)
 
+
 def random2D():
     """
     Example showing a simple 2D layered model created randomly with a single
     sequence and single property
     """
-    gen = ModelGenerator()
-    gen.layer_dh_min = 20
-    gen.num_layers = 0
-
 
     vp = Property(name="vp", vmin=1000, vmax=5000)
     lith = Lithology(name='vp', properties=[vp])
@@ -50,12 +50,15 @@ def random2D():
                         deform=deform)
     strati = Stratigraphy(sequences=[sequence])
 
+    gen = ModelGenerator()
+    gen.layer_dh_min = 20
+    gen.num_layers = 0
     gen.dip_max = 20
     gen.num_layers = 0
     gen.layer_num_min = 5
     gen.layer_dh_min = 10
-    gen.NT = 2000
     gen.animated_dataset(strati)
+
 
 def fixed2d():
     """
@@ -99,11 +102,11 @@ def fixed2d():
     thicks = [25, 25, 100, 50]
     angles = [-0.2, 0.5, 0, 1]
     strati = Stratigraphy(sequences=[sequence])
+
     gen = ModelGenerator()
     gen.NX = 800
     gen.NZ = 200
     gen.dh = 2.5
-
     gen.texture_xrange = 3
     gen.texture_zrange = 1.95 * gen.NZ / 2
 
@@ -120,6 +123,7 @@ def fixed2d():
     im = axs[3].imshow(qp, aspect="auto")
     fig.colorbar(im, ax=axs[3], orientation='horizontal')
     plt.show()
+
 
 def random_sequences():
     """
@@ -161,7 +165,6 @@ def random_sequences():
     q = Property("q", vmin=30, vmax=60, texture=4)
     shale = Lithology(name=name, properties=[vp, vpvs, rho, q])
 
-
     deform = Deformation(max_deform_freq=0.02,
                          min_deform_freq=0.0001,
                          amp_max=8,
@@ -180,9 +183,8 @@ def random_sequences():
     weathered_seq = Sequence(name="weathered",
                              lithologies=[weathered_shale],
                              thick_max=50, deform=deform)
-    roc_seq = Sequence(name="roc",
-                   lithologies=[shale],
-                   thick_max=99999, deform=deform)
+    roc_seq = Sequence(name="roc", lithologies=[shale], thick_max=99999,
+                       deform=deform)
 
     strati = Stratigraphy(sequences=[unsat_seq,
                                      sat_seq,
@@ -192,40 +194,50 @@ def random_sequences():
     gen.NX = 800
     gen.NZ = 200
     gen.dh = 2.5
-
-    gen.marine = False
     gen.texture_xrange = 3
     gen.texture_zrange = 1.95 * gen.NZ / 2
-
     gen.dip_0 = True
     gen.dip_max = 5
     gen.ddip_max = 1
-
-    gen.source_depth = 0
     gen.layer_num_min = 1
     gen.layer_dh_min = 5
     gen.layer_dh_max = 20
 
     gen.animated_dataset(strati)
 
-    # (vp, vs, rho, qp), _, _ = gen.generate_model(strati)
-    #
-    # fig, axs = plt.subplots(1, 4)
-    # im = axs[0].imshow(vp, aspect="auto")
-    # fig.colorbar(im, ax=axs[0], orientation='horizontal')
-    # im = axs[1].imshow(vp/vs, aspect="auto")
-    # fig.colorbar(im, ax=axs[1], orientation='horizontal')
-    # im = axs[2].imshow(rho, aspect="auto")
-    # fig.colorbar(im, ax=axs[2], orientation='horizontal')
-    # im = axs[3].imshow(qp, aspect="auto")
-    # fig.colorbar(im, ax=axs[3], orientation='horizontal')
-    # plt.show()
-    #
-    # strati.summary()
+
+def model_with_boundaries():
+
+    vp = Property(name="vp", vmin=1000, vmax=5000)
+    lith = Lithology(name='vp', properties=[vp])
+    sequence = Sequence(lithologies=[lith, lith, lith, lith], ordered=True)
+    strati = Stratigraphy(sequences=[sequence])
+
+    gen = ModelGenerator()
+    gen.NX = 100
+    gen.NZ = 100
+    x = np.arange(gen.NX)
+
+    # Boundaries are drawn from top the top layer to the bottom
+    bnd1 = x * 0
+    bnd2 = x * 0 + 20
+    bnd3 = 10 * np.sin(x/gen.NX * 2 * np.pi * 3) + 40
+    # Make boundary 3 appear from the middle
+    bnd3[:gen.NX//2] = 9999
+    bnd4 = 20 * np.sin(x / gen.NX * 2 * np.pi * 6) + 70
+    # Bnd 4 overlaps on layer 2 from 0 to 20
+    bnd4[0:20] = 30
+    bnds = [bnd1, bnd2, bnd3, bnd4]
+    bnds = [b.astype(int) for b in bnds]
+
+    props2d, layerids, _ = gen.generate_model(strati,
+                                              boundaries=bnds)
+
+    plt.imshow(props2d[0], aspect="auto")
+    plt.show()
 
 
 if __name__ == "__main__":
-
 
     # Initialize argument parser
     parser = argparse.ArgumentParser()
@@ -233,17 +245,10 @@ if __name__ == "__main__":
     parser.add_argument(
         "--name",
         type=str,
-        default="random_sequences",
+        default="model_with_boundaries",
         help="Name of the example to display"
     )
     # Parse the input for training parameters
     args, unparsed = parser.parse_known_args()
 
-    if args.name == "random1d":
-        random1D()
-    elif args.name == "random2d":
-        random2D()
-    elif args.name == "fixed2d":
-        fixed2d()
-    elif args.name == "random_sequences":
-        random_sequences()
+    eval(args.name)()

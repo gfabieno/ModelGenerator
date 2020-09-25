@@ -110,17 +110,17 @@ def fixed2d():
     gen.texture_xrange = 3
     gen.texture_zrange = 1.95 * gen.NZ / 2
 
-    (vp, vs, rho, qp), _, _ = gen.generate_model(strati, thicks=thicks,
+    props, _, _ = gen.generate_model(strati, thicks=thicks,
                                                  dips=angles)
 
     fig, axs = plt.subplots(1, 4)
-    im = axs[0].imshow(vp, aspect="auto")
+    im = axs[0].imshow(props["vp"], aspect="auto")
     fig.colorbar(im, ax=axs[0], orientation='horizontal')
-    im = axs[1].imshow(vs, aspect="auto")
+    im = axs[1].imshow(props["vs"], aspect="auto")
     fig.colorbar(im, ax=axs[1], orientation='horizontal')
-    im = axs[2].imshow(rho, aspect="auto")
+    im = axs[2].imshow(props["rho"], aspect="auto")
     fig.colorbar(im, ax=axs[2], orientation='horizontal')
-    im = axs[3].imshow(qp, aspect="auto")
+    im = axs[3].imshow(props["q"], aspect="auto")
     fig.colorbar(im, ax=axs[3], orientation='horizontal')
     plt.show()
 
@@ -233,7 +233,7 @@ def model_with_boundaries():
     props2d, layerids, _ = gen.generate_model(strati,
                                               boundaries=bnds)
 
-    plt.imshow(props2d[0], aspect="auto")
+    plt.imshow(props2d["vp"], aspect="auto")
     plt.show()
 
 

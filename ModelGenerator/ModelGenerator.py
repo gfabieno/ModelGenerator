@@ -676,8 +676,10 @@ class ModelGenerator:
                                           self.texture_zrange,
                                           self.texture_xrange,
                                           self.corr)
-        self.layers = layers
-        return props2d, layerids, layers
+
+        names = [prop.name for prop in layers[0].lithology]
+        propdict = {name: prop for name, prop in zip(names, props2d)}
+        return propdict, layerids, layers
 
     def animated_dataset(self, *args, **kwargs):
         """
@@ -689,21 +691,26 @@ class ModelGenerator:
         """
 
         toplots, _, layers = self.generate_model(*args, **kwargs)
-        names = [prop.name for prop in layers[0].lithology]
-        minmax = [[np.inf, -np.inf] for _ in layers[0].lithology]
+        # names = [prop.name for prop in layers[0].lithology]
+        names = list(toplots.keys())
+        minmax = {name: [np.inf, -np.inf] for name in names}
         for layer in layers:
-            for ii, prop in enumerate(layer.lithology):
-                if minmax[ii][0] > prop.min:
-                    minmax[ii][0] = prop.min
-                if minmax[ii][1] < prop.max:
-                    minmax[ii][1] = prop.max
+            for prop in layer.lithology:
+                if minmax[prop.name][0] > prop.min:
+                    minmax[prop.name][0] = prop.min
+                if minmax[prop.name][1] < prop.max:
+                    minmax[prop.name][1] = prop.max
+        for name in names:
+            if minmax[name][0] is np.inf:
+                minmax[name] = [np.min(toplots[name]) / 10,
+                                np.min(toplots[name]) * 10]
 
-        fig, axs = plt.subplots(1, len(toplots), figsize=[16, 8], squeeze=False)
+        fig, axs = plt.subplots(1, len(names), figsize=[16, 8], squeeze=False)
         axs = axs.flatten()
-        ims = [axs[ii].imshow(toplots[ii], animated=True, aspect='auto',
-                              cmap='inferno', vmin=minmax[ii][0],
-                              vmax=minmax[ii][1])
-               for ii in range(len(toplots))]
+        ims = [axs[ii].imshow(toplots[name], animated=True, aspect='auto',
+                              cmap='inferno', vmin=minmax[name][0],
+                              vmax=minmax[name][1])
+               for ii, name in enumerate(names)]
 
         for ii, ax in enumerate(axs):
             ax.set_title(names[ii])
@@ -712,14 +719,14 @@ class ModelGenerator:
         plt.tight_layout()
 
         def init():
-            for im, toplot in zip(ims, toplots):
-                im.set_array(toplot)
+            for im, name in zip(ims, names):
+                im.set_array(toplots[name])
             return ims
 
         def animate(t):
             toplots, _, layers = self.generate_model(*args, **kwargs)
-            for im, toplot in zip(ims, toplots):
-                im.set_array(toplot)
+            for im, name in zip(ims, names):
+                im.set_array(toplots[name])
             return ims
 
         _ = animation.FuncAnimation(fig, animate, init_func=init, frames=1000,

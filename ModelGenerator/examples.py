@@ -256,7 +256,7 @@ def model_with_texture_trend():
     bnds = [bnd1, bnd2, bnd3, bnd4]
     bnds = [b.astype(int) for b in bnds]
 
-    texture_trends = [None, None, x / gen.NX * 50, None]
+    texture_trends = [None, -x / gen.NX * 50, x / gen.NX * 50, bnd4]
     gen.texture_xrange = 3
     gen.texture_zrange = 1.95 * gen.NZ / 2
 

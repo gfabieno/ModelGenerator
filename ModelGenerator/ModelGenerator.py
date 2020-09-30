@@ -209,6 +209,13 @@ def gridded_model(nx, nz, layers, lz, lx, corr):
                 trends[n] = tmin + np.random.rand() * (tmax - tmin)
 
         top = np.max(layer.boundary)
+        if layer.texture_trend is not None:
+            texture_trend = -layer.texture_trend
+            texture_trend -= np.min(texture_trend)
+            if top + int(np.max(texture_trend)) + nz > 2 * nz:
+                top = 2 * nz - int(np.max(texture_trend)) - nz
+        else:
+            texture_trend = None
         for jj, z in enumerate(layer.boundary):
             for n in range(npar):
                 prop = layer.properties[n]
@@ -217,7 +224,7 @@ def gridded_model(nx, nz, layers, lz, lx, corr):
             layerids[z:, jj] = layer.idnum
             if addtext:
                 if layer.texture_trend is not None:
-                    b1 = top + z + int(layer.texture_trend[jj])
+                    b1 = top + z + int(texture_trend[jj])
                 else:
                     b1 = top
                 b2 = b1 + nz - z

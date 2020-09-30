@@ -236,6 +236,37 @@ def model_with_boundaries():
     plt.imshow(props2d["vp"], aspect="auto")
     plt.show()
 
+def model_with_texture_trend():
+
+    vp = Property(name="vp", vmin=1000, vmax=5000, texture=1000)
+    lith = Lithology(name='vp', properties=[vp])
+    sequence = Sequence(lithologies=[lith, lith, lith, lith], ordered=True)
+    strati = Stratigraphy(sequences=[sequence])
+
+    gen = ModelGenerator()
+    gen.NX = 100
+    gen.NZ = 100
+    x = np.arange(gen.NX)
+
+    # Boundaries are drawn from top the top layer to the bottom
+    bnd1 = x * 0
+    bnd2 = x * 0 + 20
+    bnd3 = 10 * np.sin(x/gen.NX * 2 * np.pi * 3) + 40
+    bnd4 = 20 * np.sin(x / gen.NX * 2 * np.pi * 6) + 70
+    bnds = [bnd1, bnd2, bnd3, bnd4]
+    bnds = [b.astype(int) for b in bnds]
+
+    texture_trends = [None, None, x / gen.NX * 50, None]
+    gen.texture_xrange = 3
+    gen.texture_zrange = 1.95 * gen.NZ / 2
+
+    props2d, layerids, _ = gen.generate_model(strati,
+                                              boundaries=bnds,
+                                              texture_trends=texture_trends)
+
+    plt.imshow(props2d["vp"], aspect="auto")
+    plt.show()
+
 
 if __name__ == "__main__":
 

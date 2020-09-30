@@ -196,17 +196,10 @@ def gridded_model(nx, nz, layers, lz, lx, corr):
         for n in range(npar):
             textamp = layers[0].lithology.properties[n].texture
             if textamp > 0:
-                textures[n] = textures[n] / np.max(textures[n]) * textamp
-                props2d[n] += textures[n][:nz, :nx]
+                textures[n] = textures[n] / np.max(textures[n])
+                props2d[n] += textures[n][:nz, :nx] * textamp
 
-    top = layers[0].thick
     for layer in layers[1:]:
-
-        if addtext:
-            for n in range(npar):
-                textamp = layer.lithology.properties[n].texture
-                if textamp > 0:
-                    textures[n] = textures[n] / np.max(textures[n]) * textamp
 
         trends = [None for _ in range(npar)]
         if addtrend is not None:
@@ -215,6 +208,7 @@ def gridded_model(nx, nz, layers, lz, lx, corr):
                 tmax = layer.lithology.properties[n].trend_max
                 trends[n] = tmin + np.random.rand() * (tmax - tmin)
 
+        top = np.max(layer.boundary)
         for jj, z in enumerate(layer.boundary):
             for n in range(npar):
                 prop = layer.properties[n]
@@ -222,14 +216,18 @@ def gridded_model(nx, nz, layers, lz, lx, corr):
                 props2d[n][z:, jj] = prop + grad * jj
             layerids[z:, jj] = layer.idnum
             if addtext:
+                if layer.texture_trend is not None:
+                    b1 = top + z + int(layer.texture_trend[jj])
+                else:
+                    b1 = top
+                b2 = b1 + nz - z
                 for n in range(npar):
                     textamp = layer.lithology.properties[n].texture
                     if textamp > 0:
-                        props2d[n][z:, jj] += textures[n][top:nz + top - z, jj]
+                        props2d[n][z:, jj] += textures[n][b1:b2, jj] * textamp
             if addtrend is not None:
                 for n in range(npar):
                     props2d[n][z:, jj] += (trends[n] * np.arange(z, nz))
-        top += layer.thick
 
     # for n in range(npar):
     #     vmin = layers[0].lithology.properties[n].min
@@ -382,7 +380,7 @@ class Sequence(object):
 class Layer(object):
 
     def __init__(self, idnum, thick, dip, sequence, lithology, properties,
-                       boundary=None, gradx=None):
+                       boundary=None, gradx=None, texture_trend=None):
         """
         A Layer object describes a specific layer within a model, providing a
         description of its lithology, its thickness, dip and the deformation of
@@ -411,6 +409,7 @@ class Layer(object):
             gradx = [0 for _ in self.properties]
         self.gradx = gradx
         self.boundary = boundary
+        self.texture_trend = texture_trend
 
 
 class Stratigraphy(object):
@@ -625,7 +624,8 @@ class ModelGenerator:
                     pass
 
     def generate_model(self, stratigraphy, thicks=None, dips=None,
-                       boundaries=None, gradxs=None, seed=None):
+                       boundaries=None, gradxs=None, texture_trends=None,
+                       seed=None):
         """
 
         :param stratigraphy: A stratigraphy object
@@ -639,6 +639,9 @@ class ModelGenerator:
         :param gradxs: A list of the linear trend of each property in each layer
                        If None, no trend in x is added and if "random", create
                        random gradients in each layer.
+        :param texture_trends: A list of the of array depicting the alignment of
+                              the texture within a layer. If None, will follow
+                              the top boundary of the layer.
         :param seed: A seed for random generators
 
         :return:
@@ -671,6 +674,9 @@ class ModelGenerator:
         else:
             for ii, layer in enumerate(layers):
                 layer.boundary = boundaries[ii]
+        if texture_trends is not None:
+            for ii, layer in enumerate(layers):
+                layer.texture_trend = texture_trends[ii]
 
         props2d, layerids = gridded_model(self.NX, self.NZ, layers,
                                           self.texture_zrange,

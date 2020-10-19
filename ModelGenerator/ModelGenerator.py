@@ -154,7 +154,10 @@ def generate_random_boundaries(nx, layers):
             else:
                 prob = np.random.rand()
             if seq.deform is not None and prob < seq.deform.prob_deform_change:
-                de = seq.deform.create_deformation(nx)
+                if seq.deform.cumulative:
+                    de += seq.deform.create_deformation(nx).astype(np.int)
+                else:
+                    de = seq.deform.create_deformation(nx)
             boundary += de.astype(np.int)
             boundary = np.clip(boundary, 0, None)
             layer.boundary = boundary
@@ -511,7 +514,7 @@ class Stratigraphy(object):
 class Deformation:
 
     def __init__(self, max_deform_freq=0, min_deform_freq=0, amp_max=0,
-                 max_deform_nfreq=20, prob_deform_change=0.3):
+                 max_deform_nfreq=20, prob_deform_change=0.3, cumulative=False):
         """
         Create random deformations of a boundary with random harmonic functions
 
@@ -519,12 +522,15 @@ class Deformation:
         :param min_deform_freq: Minimum frequency of the harmonic components
         :param amp_max: Maximum amplitude of the deformation
         :param max_deform_nfreq: Number of frequencies
+        :param cumulative:      Bool, if True, deformation of consecutive layers
+                                are added together (are correlated).
         """
         self.max_deform_freq = max_deform_freq
         self.min_deform_freq = min_deform_freq
         self.amp_max = amp_max
         self.max_deform_nfreq = max_deform_nfreq
         self.prob_deform_change = prob_deform_change
+        self.cumulative = cumulative
 
     def create_deformation(self, nx):
         """
@@ -538,9 +544,9 @@ class Deformation:
         deform = np.zeros(nx)
         if self.amp_max > 0 and self.max_deform_freq > 0:
             nfreqs = np.random.randint(self.max_deform_nfreq)
-            vmin = self.min_deform_freq
-            amp = (self.max_deform_freq - self.min_deform_freq)
-            freqs = vmin + amp * np.random.rand(nfreqs)
+            vmin = np.log(self.max_deform_freq)
+            amp = (np.log(self.min_deform_freq) - np.log(self.max_deform_freq))
+            freqs = np.exp(vmin + amp * np.random.rand(nfreqs))
             phases = np.random.rand(nfreqs) * np.pi * 2
             amps = np.random.rand(nfreqs)
             for ii in range(nfreqs):
@@ -694,18 +700,20 @@ class ModelGenerator:
         propdict = {name: prop for name, prop in zip(names, props2d)}
         return propdict, layerids, layers
 
-    def animated_dataset(self, *args, **kwargs):
+    def plot_model(self, props2d, layers, animated=False, figsize=(16, 8)):
         """
-        Produces an animation of a dataset, showing the input data, and the
-        different labels for each example.
+        Plot the properties of a generated gridded model
 
-        @params:
-        phase (str): Which dataset: either train, test or validate
+        :param props2d: The dictionary of properties from the output of
+                        generate_model
+        :param layers:  A list of layers from the output of  generate_model
+        :param animated: It true, the plot can be animated
+        :param figsize: A tuple providing the size of the figure to create
+
+        :return: ims: a list of pyplot images
+                 fig: A Figure object
         """
-
-        toplots, _, layers = self.generate_model(*args, **kwargs)
-        # names = [prop.name for prop in layers[0].lithology]
-        names = list(toplots.keys())
+        names = list(props2d.keys())
         minmax = {name: [np.inf, -np.inf] for name in names}
         for layer in layers:
             for prop in layer.lithology:
@@ -715,12 +723,12 @@ class ModelGenerator:
                     minmax[prop.name][1] = prop.max
         for name in names:
             if minmax[name][0] is np.inf:
-                minmax[name] = [np.min(toplots[name]) / 10,
-                                np.min(toplots[name]) * 10]
+                minmax[name] = [np.min(props2d[name]) / 10,
+                                np.min(props2d[name]) * 10]
 
-        fig, axs = plt.subplots(1, len(names), figsize=[16, 8], squeeze=False)
+        fig, axs = plt.subplots(1, len(names), figsize=figsize, squeeze=False)
         axs = axs.flatten()
-        ims = [axs[ii].imshow(toplots[name], animated=True, aspect='auto',
+        ims = [axs[ii].imshow(props2d[name], animated=animated, aspect='auto',
                               cmap='inferno', vmin=minmax[name][0],
                               vmax=minmax[name][1])
                for ii, name in enumerate(names)]
@@ -731,15 +739,30 @@ class ModelGenerator:
                          fraction=0.2)
         plt.tight_layout()
 
+        return fig, ims
+
+    def animated_dataset(self, *args, **kwargs):
+        """
+        Produces an animation of a dataset, showing the input data, and the
+        different labels for each example.
+
+        @params:
+        phase (str): Which dataset: either train, test or validate
+        """
+
+        props2d, _, layers = self.generate_model(*args, **kwargs)
+        names = list(props2d.keys())
+        fig, ims = self.plot_model(props2d, layers, animated=True)
+
         def init():
             for im, name in zip(ims, names):
-                im.set_array(toplots[name])
+                im.set_array(props2d[name])
             return ims
 
         def animate(t):
-            toplots, _, layers = self.generate_model(*args, **kwargs)
+            props2d, _, layers = self.generate_model(*args, **kwargs)
             for im, name in zip(ims, names):
-                im.set_array(toplots[name])
+                im.set_array(props2d[name])
             return ims
 
         _ = animation.FuncAnimation(fig, animate, init_func=init, frames=1000,

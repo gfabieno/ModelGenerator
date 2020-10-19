@@ -110,20 +110,11 @@ def fixed2d():
     gen.texture_xrange = 3
     gen.texture_zrange = 1.95 * gen.NZ / 2
 
-    props, _, _ = gen.generate_model(strati, thicks=thicks,
+    props, _, layers = gen.generate_model(strati, thicks=thicks,
                                                  dips=angles)
 
-    fig, axs = plt.subplots(1, 4)
-    im = axs[0].imshow(props["vp"], aspect="auto")
-    fig.colorbar(im, ax=axs[0], orientation='horizontal')
-    im = axs[1].imshow(props["vs"], aspect="auto")
-    fig.colorbar(im, ax=axs[1], orientation='horizontal')
-    im = axs[2].imshow(props["rho"], aspect="auto")
-    fig.colorbar(im, ax=axs[2], orientation='horizontal')
-    im = axs[3].imshow(props["q"], aspect="auto")
-    fig.colorbar(im, ax=axs[3], orientation='horizontal')
+    gen.plot_model(props, layers)
     plt.show()
-
 
 def random_sequences():
     """
@@ -230,10 +221,8 @@ def model_with_boundaries():
     bnds = [bnd1, bnd2, bnd3, bnd4]
     bnds = [b.astype(int) for b in bnds]
 
-    props2d, layerids, _ = gen.generate_model(strati,
-                                              boundaries=bnds)
-
-    plt.imshow(props2d["vp"], aspect="auto")
+    props2d, layerids, layers = gen.generate_model(strati, boundaries=bnds)
+    gen.plot_model(props2d, layers)
     plt.show()
 
 def model_with_texture_trend():
@@ -260,11 +249,10 @@ def model_with_texture_trend():
     gen.texture_xrange = 3
     gen.texture_zrange = 1.95 * gen.NZ / 2
 
-    props2d, layerids, _ = gen.generate_model(strati,
+    props2d, layerids, layers = gen.generate_model(strati,
                                               boundaries=bnds,
                                               texture_trends=texture_trends)
-
-    plt.imshow(props2d["vp"], aspect="auto")
+    gen.plot_model(props2d, layers)
     plt.show()
 
 

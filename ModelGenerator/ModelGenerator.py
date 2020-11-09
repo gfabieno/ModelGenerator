@@ -390,7 +390,7 @@ class Sequence(object):
 class Layer(object):
 
     def __init__(self, idnum, thick, dip, sequence, lithology, properties,
-                       boundary=None, gradx=None, texture_trend=None):
+                 boundary=None, gradx=None, texture_trend=None):
         """
         A Layer object describes a specific layer within a model, providing a
         description of its lithology, its thickness, dip and the deformation of
@@ -768,5 +768,3 @@ class ModelGenerator:
         _ = animation.FuncAnimation(fig, animate, init_func=init, frames=1000,
                                     interval=3000, blit=True, repeat=True)
         plt.show()
-
-

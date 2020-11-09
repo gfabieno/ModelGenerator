@@ -474,7 +474,7 @@ class Stratigraphy(object):
             lith = next(seqiter)
             if gradxs is None:
                 gradx = None
-            elif gradxs is "random":
+            elif gradxs == "random":
                 gradx = [0 for _ in lith]
                 for n, prop in enumerate(lith):
                     amp = prop.gradx_max-prop.gradx_min

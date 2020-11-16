@@ -445,16 +445,17 @@ class Stratigraphy(object):
         seqid = 0
         seqthick = 0
         seqiter = iter(self.sequences[0])
-        sthicks = [np.random.uniform(s.thick_min, s.thick_max)
-                   for s in self.sequences]
-        sthicks[-1] = 1e09
+        sthicks_min = [s.thick_min for s in self.sequences]
+        sthicks_max = [s.thick_max for s in self.sequences]
+        sthicks_min[-1] = sthicks_max[-1] = 1e09
 
         seq = self.sequences[0]
         lith = None
         properties = [0.0 for _ in self.sequences[0].lithologies[0]]
         for ii, (t, di) in enumerate(zip(thicks, dips)):
+            seqthick0 = seqthick
             seqthick += t
-            if seqthick > sthicks[seqid]:
+            if seqthick0 >= sthicks_min[seqid] or seqthick >= sthicks_max[seqid]:
                 if seqid < len(self.sequences) - 1:
                     seqid += 1
                     seqiter = iter(self.sequences[seqid])

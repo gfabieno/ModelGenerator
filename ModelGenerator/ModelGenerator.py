@@ -93,10 +93,10 @@ def random_thicks(nz, thickmin, thickmax, nmin, nlayer,
         nlayer = int(np.clip(nlayer, nlmin, nlmax))
 
     amp = (thickmax - thickmin)
-    thicks = (thickmin + np.random.rand(nlayer) * amp).astype(np.int)
+    thicks = np.random.uniform(thickmin, thickmax).astype(np.int)
 
     if thick0max is not None and thick0min is not None:
-        thicks[0] = thick0min + np.random.rand() * (thick0max - thick0min)
+        thicks[0] = np.random.uniform(thick0min, thick0max)
 
     tops = np.cumsum(thicks)
     thicks = thicks[tops < nz]
@@ -118,11 +118,9 @@ def random_dips(n_dips, dip_max, ddip_max, dip_0=True):
 
     dips = np.zeros(n_dips)
     if not dip_0:
-        dips[1] = -dip_max + np.random.rand() * 2 * dip_max
+        dips[1] = np.random.uniform(-dip_max, dip_max)
     for ii in range(2, n_dips):
-        dips[ii] = (
-            dips[ii - 1] + (2.0*np.random.rand()-1.) * ddip_max
-        )
+        dips[ii] = dips[ii - 1] + np.random.uniform(-ddip_max, ddip_max)
         if np.abs(dips[ii]) > dip_max:
             dips[ii] = np.sign(dips[ii]) * dip_max
 
@@ -209,7 +207,7 @@ def gridded_model(nx, nz, layers, lz, lx, corr):
             for n in range(npar):
                 tmin = layer.lithology.properties[n].trend_min
                 tmax = layer.lithology.properties[n].trend_max
-                trends[n] = tmin + np.random.rand() * (tmax - tmin)
+                trends[n] = np.random.uniform(tmin, tmax)
 
         top = np.max(layer.boundary)
         if layer.texture_trend is not None:
@@ -446,7 +444,7 @@ class Stratigraphy(object):
         seqid = 0
         seqthick = 0
         seqiter = iter(self.sequences[0])
-        sthicks = [s.thick_min + np.random.rand() * (s.thick_max - s.thick_min)
+        sthicks = [np.random.uniform(s.thick_min, s.thick_max)
                    for s in self.sequences]
         sthicks[-1] = 1e09
 
@@ -468,19 +466,18 @@ class Stratigraphy(object):
             elif gradxs == "random":
                 gradx = [0 for _ in lith]
                 for n, prop in enumerate(lith):
-                    amp = prop.gradx_max-prop.gradx_min
-                    gradxs[n] = prop.gradx_min + np.random.rand() * amp
+                    gradxs[n] = np.random.rand(prop.gradx_min, prop.gradx_max)
             else:
                 gradx = gradxs[ii]
 
             for jj, prop in enumerate(lith):
                 if prop.dzmax is not None and lith0 == lith:
-                    amp = 2 * prop.dzmax
                     minval = properties[jj] - prop.dzmax
+                    maxval = properties[jj] + prop.dzmax
                 else:
                     minval = prop.min
-                    amp = (prop.max - prop.min)
-                properties[jj] = minval + np.random.rand() * amp
+                    maxval = prop.max
+                properties[jj] = np.random.uniform(minval, maxval)
 
             layers.append(Layer(ii, t, di, seq, lith, gradx=gradx,
                                 properties=copy.copy(properties)))
@@ -536,8 +533,8 @@ class Deformation:
         if self.amp_max > 0 and self.max_deform_freq > 0:
             nfreqs = np.random.randint(self.max_deform_nfreq)
             vmin = np.log(self.max_deform_freq)
-            amp = (np.log(self.min_deform_freq) - np.log(self.max_deform_freq))
-            freqs = np.exp(vmin + amp * np.random.rand(nfreqs))
+            vmax = np.log(self.min_deform_freq)
+            freqs = np.exp(np.random.uniform(vmin, vmax, size=nfreqs))
             phases = np.random.rand(nfreqs) * np.pi * 2
             amps = np.random.rand(nfreqs)
             for ii in range(nfreqs):

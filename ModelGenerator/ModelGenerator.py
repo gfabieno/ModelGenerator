@@ -180,7 +180,7 @@ def gridded_model(nx, nz, layers, lz, lx, corr):
 
     # Generate the 2D model, from top thicks to bottom
     npar = len(layers[0].properties)
-    props2d = [np.zeros([nz, nx]) + p for p in layers[0].properties]
+    props2d = [np.full([nz, nx], p) for p in layers[0].properties]
     layerids = np.zeros([nz, nx])
 
     addtext = False

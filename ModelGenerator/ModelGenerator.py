@@ -371,16 +371,7 @@ class Sequence(object):
             if self.ordered:
                 out = self.lithologies[self.n]
             else:
-                if self.proportions is not None:
-                    a = np.random.rand()
-                    flo = 0
-                    for ii, b in enumerate(self.proportions):
-                        flo += b
-                        if a <= b:
-                            break
-                    out = self.lithologies[ii]
-                else:
-                    out = np.random.choice(self.lithologies)
+                out = np.random.choice(self.lithologies, p=self.proportions)
             self.n += 1
             return out
         else:

@@ -93,7 +93,8 @@ def random_thicks(nz, thickmin, thickmax, nmin, nlayer,
         nlayer = int(np.clip(nlayer, nlmin, nlmax))
 
     amp = (thickmax - thickmin)
-    thicks = np.random.uniform(thickmin, thickmax).astype(np.int)
+    thicks = np.random.uniform(thickmin, thickmax,
+                               size=[nlayer]).astype(np.int)
 
     if thick0max is not None and thick0min is not None:
         thicks[0] = np.random.uniform(thick0min, thick0max)

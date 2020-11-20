@@ -93,10 +93,11 @@ def random_thicks(nz, thickmin, thickmax, nmin, nlayer,
         nlayer = int(np.clip(nlayer, nlmin, nlmax))
 
     amp = (thickmax - thickmin)
-    thicks = (thickmin + np.random.rand(nlayer) * amp).astype(np.int)
+    thicks = np.random.uniform(thickmin, thickmax,
+                               size=[nlayer]).astype(np.int)
 
     if thick0max is not None and thick0min is not None:
-        thicks[0] = thick0min + np.random.rand() * (thick0max - thick0min)
+        thicks[0] = np.random.uniform(thick0min, thick0max)
 
     tops = np.cumsum(thicks)
     thicks = thicks[tops < nz]
@@ -118,11 +119,9 @@ def random_dips(n_dips, dip_max, ddip_max, dip_0=True):
 
     dips = np.zeros(n_dips)
     if not dip_0:
-        dips[1] = -dip_max + np.random.rand() * 2 * dip_max
+        dips[1] = np.random.uniform(-dip_max, dip_max)
     for ii in range(2, n_dips):
-        dips[ii] = (
-            dips[ii - 1] + (2.0*np.random.rand()-1.) * ddip_max
-        )
+        dips[ii] = dips[ii - 1] + np.random.uniform(-ddip_max, ddip_max)
         if np.abs(dips[ii]) > dip_max:
             dips[ii] = np.sign(dips[ii]) * dip_max
 
@@ -182,7 +181,7 @@ def gridded_model(nx, nz, layers, lz, lx, corr):
 
     # Generate the 2D model, from top thicks to bottom
     npar = len(layers[0].properties)
-    props2d = [np.zeros([nz, nx]) + p for p in layers[0].properties]
+    props2d = [np.full([nz, nx], p) for p in layers[0].properties]
     layerids = np.zeros([nz, nx])
 
     addtext = False
@@ -209,7 +208,7 @@ def gridded_model(nx, nz, layers, lz, lx, corr):
             for n in range(npar):
                 tmin = layer.lithology.properties[n].trend_min
                 tmax = layer.lithology.properties[n].trend_max
-                trends[n] = tmin + np.random.rand() * (tmax - tmin)
+                trends[n] = np.random.uniform(tmin, tmax)
 
         top = np.max(layer.boundary)
         if layer.texture_trend is not None:
@@ -371,16 +370,7 @@ class Sequence(object):
             if self.ordered:
                 out = self.lithologies[self.n]
             else:
-                if self.proportions is not None:
-                    a = np.random.rand()
-                    flo = 0
-                    for ii, b in enumerate(self.proportions):
-                        flo += b
-                        if a <= b:
-                            break
-                    out = self.lithologies[ii]
-                else:
-                    out = np.random.choice(self.lithologies)
+                out = np.random.choice(self.lithologies, p=self.proportions)
             self.n += 1
             return out
         else:
@@ -390,7 +380,7 @@ class Sequence(object):
 class Layer(object):
 
     def __init__(self, idnum, thick, dip, sequence, lithology, properties,
-                       boundary=None, gradx=None, texture_trend=None):
+                 boundary=None, gradx=None, texture_trend=None):
         """
         A Layer object describes a specific layer within a model, providing a
         description of its lithology, its thickness, dip and the deformation of
@@ -474,16 +464,17 @@ class Stratigraphy(object):
         seqid = 0
         seqthick = 0
         seqiter = iter(self.sequences[0])
-        sthicks = [s.thick_min + np.random.rand() * (s.thick_max - s.thick_min)
-                   for s in self.sequences]
-        sthicks[-1] = 1e09
+        sthicks_min = [s.thick_min for s in self.sequences]
+        sthicks_max = [s.thick_max for s in self.sequences]
+        sthicks_min[-1] = sthicks_max[-1] = 1e09
 
         seq = self.sequences[0]
         lith = None
         properties = [0.0 for _ in self.sequences[0].lithologies[0]]
         for ii, (t, di) in enumerate(zip(thicks, dips)):
+            seqthick0 = seqthick
             seqthick += t
-            if seqthick > sthicks[seqid]:
+            if seqthick0 >= sthicks_min[seqid] or seqthick >= sthicks_max[seqid]:
                 if seqid < len(self.sequences) - 1:
                     seqid += 1
                     seqiter = iter(self.sequences[seqid])
@@ -493,22 +484,21 @@ class Stratigraphy(object):
             lith = next(seqiter)
             if gradxs is None:
                 gradx = None
-            elif gradxs is "random":
+            elif gradxs == "random":
                 gradx = [0 for _ in lith]
                 for n, prop in enumerate(lith):
-                    amp = prop.gradx_max-prop.gradx_min
-                    gradxs[n] = prop.gradx_min + np.random.rand() * amp
+                    gradxs[n] = np.random.rand(prop.gradx_min, prop.gradx_max)
             else:
                 gradx = gradxs[ii]
 
             for jj, prop in enumerate(lith):
                 if prop.dzmax is not None and lith0 == lith:
-                    amp = 2 * prop.dzmax
                     minval = properties[jj] - prop.dzmax
+                    maxval = properties[jj] + prop.dzmax
                 else:
                     minval = prop.min
-                    amp = (prop.max - prop.min)
-                properties[jj] = minval + np.random.rand() * amp
+                    maxval = prop.max
+                properties[jj] = np.random.uniform(minval, maxval)
 
             layers.append(Layer(ii, t, di, seq, lith, gradx=gradx,
                                 properties=copy.copy(properties)))
@@ -564,8 +554,8 @@ class Deformation:
         if self.amp_max > 0 and self.max_deform_freq > 0:
             nfreqs = np.random.randint(self.max_deform_nfreq)
             vmin = np.log(self.max_deform_freq)
-            amp = (np.log(self.min_deform_freq) - np.log(self.max_deform_freq))
-            freqs = np.exp(vmin + amp * np.random.rand(nfreqs))
+            vmax = np.log(self.min_deform_freq)
+            freqs = np.exp(np.random.uniform(vmin, vmax, size=nfreqs))
             phases = np.random.rand(nfreqs) * np.pi * 2
             amps = np.random.rand(nfreqs)
             for ii in range(nfreqs):
@@ -788,5 +778,3 @@ class ModelGenerator:
         _ = animation.FuncAnimation(fig, animate, init_func=init, frames=1000,
                                     interval=3000, blit=True, repeat=True)
         plt.show()
-
-

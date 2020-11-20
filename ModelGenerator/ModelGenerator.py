@@ -428,6 +428,25 @@ class Stratigraphy(object):
         self.sequences = sequences
         self.layers = None
 
+    def properties(self):
+        """
+        Summarize the properties in Stratigraphy
+
+        :return:
+            props: A dict containing all properties contained in Stratigraphy
+                   with minimum and maximum values {pro_name: [min, max]
+        """
+        props = {p.name: [9999, 0]
+                 for p in self.sequences[0].lithologies[0]}
+        for seq in self.sequences:
+            for lith in seq:
+                for p in lith.properties:
+                    if props[p.name][0] > p.min:
+                        props[p.name][0] = p.min
+                    if props[p.name][1] < p.max:
+                        props[p.name][1] = p.max
+        return props
+
     def build_stratigraphy(self, thicks, dips, gradxs=None):
         """
         Generate a sequence of Layer object that provides properties of each
@@ -707,10 +726,11 @@ class ModelGenerator:
         minmax = {name: [np.inf, -np.inf] for name in names}
         for layer in layers:
             for prop in layer.lithology:
-                if minmax[prop.name][0] > prop.min:
-                    minmax[prop.name][0] = prop.min
-                if minmax[prop.name][1] < prop.max:
-                    minmax[prop.name][1] = prop.max
+                if prop.name in minmax:
+                    if minmax[prop.name][0] > prop.min:
+                        minmax[prop.name][0] = prop.min
+                    if minmax[prop.name][1] < prop.max:
+                        minmax[prop.name][1] = prop.max
         for name in names:
             if minmax[name][0] is np.inf:
                 minmax[name] = [np.min(props2d[name]) / 10,
@@ -725,8 +745,8 @@ class ModelGenerator:
 
         for ii, ax in enumerate(axs):
             ax.set_title(names[ii])
-            plt.colorbar(ims[ii], ax=ax, orientation="horizontal", pad=0.05,
-                         fraction=0.2)
+            plt.colorbar(ims[ii], ax=ax, orientation="horizontal", pad=0.16,
+                         fraction=0.15)
         plt.tight_layout()
 
         return fig, ims

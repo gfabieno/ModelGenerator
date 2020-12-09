@@ -753,7 +753,7 @@ class ModelGenerator:
 
         return fig, ims
 
-    def animated_dataset(self, *args, **kwargs):
+    def animated_dataset(self, *args, filename=None, nframes=1000, **kwargs):
         """
         Produces an animation of a dataset, showing the input data, and the
         different labels for each example.
@@ -777,6 +777,13 @@ class ModelGenerator:
                 im.set_array(props2d[name])
             return ims
 
-        _ = animation.FuncAnimation(fig, animate, init_func=init, frames=1000,
-                                    interval=3000, blit=True, repeat=True)
+        anim = animation.FuncAnimation(fig, animate, init_func=init,
+                                       frames=nframes, interval=3000, blit=True,
+                                       repeat=True)
+        if filename:
+            Writer = animation.writers['ffmpeg']
+            writer = Writer(fps=1, metadata=dict(artist='ModelGenerator'),
+                            bitrate=1800)
+            anim.save(filename + ".mp4", writer=writer)
+
         plt.show()

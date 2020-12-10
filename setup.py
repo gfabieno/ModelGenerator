@@ -6,7 +6,7 @@ def readme():
         return f.read()
 
 setup(name='ModelGenerator',
-      version='0.1',
+      version='0.1.1',
       description='Package layered model generation',
       long_description=readme(),
       author='Gabriel Fabien-Ouellet',

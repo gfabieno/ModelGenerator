@@ -318,7 +318,7 @@ class Sequence(object):
 
     def __init__(self, name="Default", lithologies=None, ordered=False,
                  proportions=None, thick_min=0, thick_max=1e12, nmax=9999,
-                 deform=None):
+                 nmin=1, deform=None):
         """
         A Sequence object gives a sequence of Lithology objects. It can be
         ordered or random, meaning that when iterated upon, the Sequence object
@@ -337,8 +337,10 @@ class Sequence(object):
         :param thick_max: The maximum thickness of the sequence
         :param nmax: Maximum number of lithologies that can be drawn from a
                      sequence, when ordered is False.
+        :param nmin: Minimum number of lithologies that can be drawn from a
+                     sequence, when ordered is False.
         :param deform: A Deformation object that generate random deformation of
-                        a boundary
+                       a boundary
         """
 
         self.name = name
@@ -356,7 +358,7 @@ class Sequence(object):
         if ordered:
             nmax = len(lithologies)
         self.nmax = nmax
-
+        self.nmin = nmin
         self.thick_max = thick_max
         self.thick_min = thick_min
         self.deform = deform
@@ -473,17 +475,21 @@ class Stratigraphy(object):
         seq = self.sequences[0]
         lith = None
         properties = [0.0 for _ in self.sequences[0].lithologies[0]]
+        seq_nlay = 0
         for ii, (t, di) in enumerate(zip(thicks, dips)):
             seqthick0 = seqthick
             seqthick += t
-            if seqthick0 > sthicks_min[seqid] or seqthick >= sthicks_max[seqid]:
+            if seq_nlay >= seq.nmin and (seqthick0 > sthicks_min[seqid]
+                                         or seqthick >= sthicks_max[seqid]):
+                seq_nlay = 0
                 if seqid < len(self.sequences) - 1:
                     seqid += 1
                     seqiter = iter(self.sequences[seqid])
                     seq = self.sequences[seqid]
-
+            seq_nlay += 1
             lith0 = lith
             lith = next(seqiter)
+
             if gradxs is None:
                 gradx = None
             elif gradxs == "random":

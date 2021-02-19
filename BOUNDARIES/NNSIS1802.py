@@ -8,23 +8,26 @@ from os import listdir
 #vp = mg.Property("vp", vmin = 0, vmax = 0)
 #rho = mg.Property("rho", vmin = 0, vmax = 0)
 #mt = mg.Lithology(name = name, properties=[vp, rho])
-
+#Supposons un ratio vp/vs = 2
 name = "Sediments"
 vp = mg.Property("vp", vmin = 5278, vmax = 5513,texture = 150)
+vs = mg.Property("vs",vmin = 5278/2, vmax = 5513/2,texture = 150)
 rho = mg.Property("rho", vmin = 2811, vmax = 2901, texture = 150)
-Sediments = mg.Lithology(name = name, properties=[vp, rho])
+Sediments = mg.Lithology(name = name, properties=[vp, vs, rho])
 
 name = "Sediments_graphiteux"
 vp = mg.Property("vp", vmin = 5341, vmax = 5685,texture = 150)
+vs = mg.Property("vs", vmin = 5341/2, vmax = 5685/2,texture = 150)
 rho = mg.Property("rho", vmin = 2773, vmax = 22849, texture = 150)
-Sediments_graphiteux = mg.Lithology(name = name, properties=[vp, rho])
+Sediments_graphiteux = mg.Lithology(name = name, properties=[vp, vs, rho])
 
 name = "Basaltes"
 vp = mg.Property("vp", vmin = 5899 , vmax = 6299,texture = 150)
+vs = mg.Property("vs", vmin = 5899/2 , vmax = 6299/2,texture = 150)
 rho = mg.Property("rho", vmin = 2855, vmax = 3255, texture = 150)
-basaltes = mg.Lithology(name = name, properties=[vp, rho])
+basaltes = mg.Lithology(name = name, properties=[vp, vs, rho])
 
-#Définition des séquences
+#Definition des sequences
 
 sequence_beauparlant_superieur = mg.Sequence(lithologies = [basaltes,Sediments_graphiteux])
 
@@ -32,7 +35,7 @@ sequence = mg.Sequence(lithologies=[Sediments, Sediments, basaltes, basaltes, ba
 
 strati = mg.Stratigraphy(sequences=[sequence])
 
-# Générer le modèle
+# Generer le modele
 
 gen = mg.ModelGenerator()
 gen.NX = 4120
@@ -42,11 +45,11 @@ x = np.arange(gen.NX)
 
 
 
-#Importer les frontières exportées de Opendtect
+#Importer les frontieres exportees de Opendtect
 
-directory = "\\Users\\Jérémy Gendreau\\PycharmProjects\\ModelGenerator\\BOUNDARIES\\"
+directory = "/data/jgendreau/NNSIS1802/BOUNDARIES/"
 
-#Lecture des fichiers exportés de Opendtect et création des frontières
+#Lecture des fichiers exportes de Opendtect et creation des frontieres
 
 def lirefichier(filename):
     with open(directory+filename) as bsp:
@@ -72,7 +75,7 @@ beauparlant_inferieur = lirefichier("BEAUPARLANT_INFERIEUR_TOP.dat")
 unites = [debut_leve,nuvilik_pli_top,beauparlant_superieur_pli,beauparlant_centre_pli,beauparlant_inferieur_pli
           ,nuvilik_top,nuvilik_reflec1,nuvilik_reflec2,beauparlant_superieur,beauparlant_centre,beauparlant_inferieur]
 
-#Création du modèle
+#Creation du modele
 
 bnds = unites
 bnds = [b.astype(int) for b in bnds]

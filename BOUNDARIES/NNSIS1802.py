@@ -9,6 +9,12 @@ from os import listdir
 #rho = mg.Property("rho", vmin = 0, vmax = 0)
 #mt = mg.Lithology(name = name, properties=[vp, rho])
 #Supposons un ratio vp/vs = 2
+
+"""
+Gabriel: Pycharm te dit quand il y a des erreurs de style (souligné orange).
+ Regarde-les, ça apprend à respecter les conventions python. Dans ce qui suit,
+ tu devrais par exemple enlever les espaces vmin = 5278 -> vmin=5278"""
+
 name = "Sediments"
 vp = mg.Property("vp", vmin = 5278, vmax = 5513,texture = 150)
 vs = mg.Property("vs",vmin = 5278/2, vmax = 5513/2,texture = 150)
@@ -28,10 +34,32 @@ rho = mg.Property("rho", vmin = 2855, vmax = 3255, texture = 150)
 basaltes = mg.Lithology(name = name, properties=[vp, vs, rho])
 
 #Definition des sequences
-
-sequence_beauparlant_superieur = mg.Sequence(lithologies = [basaltes,Sediments_graphiteux])
-
-sequence = mg.Sequence(lithologies=[Sediments, Sediments, basaltes, basaltes, basaltes, Sediments, Sediments, Sediments, basaltes, basaltes, basaltes], ordered = True)
+"""
+Gabriel: Une convention importante est de ne pas dépasser 80 caractères par ligne.
+Tu peux morceler une ligne de code sur plusieurs ligne pour rendre le tout pus
+lisible. Exemple à la ligne suivante.
+"""
+sequence_beauparlant_superieur = mg.Sequence(lithologies=[basaltes,
+                                                          Sediments_graphiteux])
+"""
+Gabriel: Une convention importante est de ne pas dépasser 80 caractères par lignes.
+Tu peux morceler une ligne de code sur plusieurs ligne pour rendre le tout pus
+lisible. Exemple à la ligne suivante.
+Pycharm peux afficher une ligne à 80 caractaires 
+https://stackoverflow.com/questions/17319422/how-do-i-set-the-maximum-line-length-in-pycharm
+"""
+sequence = mg.Sequence(lithologies=[Sediments,
+                                    Sediments,
+                                    basaltes,
+                                    basaltes,
+                                    basaltes,
+                                    Sediments,
+                                    Sediments,
+                                    Sediments,
+                                    basaltes,
+                                    basaltes,
+                                    basaltes],
+                       ordered=True)
 
 strati = mg.Stratigraphy(sequences=[sequence])
 
@@ -88,3 +116,6 @@ gen.texture_zrange =0.25*gen.NZ
 props2d, layerids, layers = gen.generate_model(strati, boundaries=bnds,texture_trends=texture_trends)
 gen.plot_model(props2d, layers)
 plt.show()
+"""
+Gabriel: tu peux sauvegarder la figure en image avec plt.savefig
+"""

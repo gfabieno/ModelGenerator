@@ -11,6 +11,11 @@ from os import listdir
 #Supposons un ratio vp/vs = 2
 
 """
+Gabriel: C'est bien de mettre un petit résumé de ce que fait ce scrite au début.
+"""
+
+
+"""
 Gabriel: Pycharm te dit quand il y a des erreurs de style (souligné orange).
  Regarde-les, ça apprend à respecter les conventions python. Dans ce qui suit,
  tu devrais par exemple enlever les espaces vmin = 5278 -> vmin=5278"""

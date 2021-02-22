@@ -78,6 +78,12 @@ x = np.arange(gen.NX)
 
 
 
+"""
+Gabriel: J'ai habitude de mettre toutes les variables spécifiques à ton 
+ordinateur au début du script, comme ça c'est facile à adapter 
+(par exxemple directory)
+"""
+
 #Importer les frontieres exportees de Opendtect
 
 directory = "/data/jgendreau/NNSIS1802/BOUNDARIES/"

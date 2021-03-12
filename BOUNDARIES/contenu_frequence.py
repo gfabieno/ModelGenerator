@@ -39,7 +39,8 @@ plt.show()
 
 ## Ricker wavelet
 
-vec2 = seis.ricker_wavelet(f0=25)
+f0=26
+vec2 = seis.ricker_wavelet(f0=f0)
 plt.grid()
 plt.plot(vec2)
 plt.show()
@@ -49,15 +50,16 @@ T=1/1000
 amplitude=fft(vec2)
 amplitude = np.divide(np.abs(amplitude),max(np.abs(amplitude)))
 freq=fftfreq(len(vec2),T)
-#plt.plot(x[0:len(moyenne)//2], (np.abs(np.divide(ffttraces[1000][0:len(
-#   moyenne)//2],max(ffttraces[1000])))))
+plt.plot(x[0:len(moyenne)//2], (np.abs(np.divide(np.abs(ffttraces[1000][0:len(
+   moyenne)//2]),max(np.abs(ffttraces[1000]))))))
 plt.plot(freq[0:len(vec2)//2], (np.abs(amplitude[0:len(vec2)//2])))
 plt.plot(x[0:len(moyenne)//2], (np.abs(moyenne[0:len(
     moyenne)//2])))
 plt.grid()
 plt.xlabel('Fréquence (Hz)')
 plt.ylabel('Amplitude relative')
-plt.legend(['Source','Donnees'])
+plt.legend(['Trace','Source','Donnees'])
+plt.title('Source:Ricker avec f0 = 26')
 plt.xlim(0, 150)
 plt.savefig('spectres_frequence.png',dpi = 100)
 plt.show()

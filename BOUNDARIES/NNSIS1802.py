@@ -13,23 +13,38 @@ directory = "/data/jgendreau/NNSIS1802/BOUNDARIES/"
 
 # Supposons un ratio vp/vs = 2
 
+name = "Mort-terrain"
+vp = mg.Property("vp", vmin=3700, vmax=3700, texture=200)
+vs = mg.Property("vs", vmin=1600, vmax=1600, texture=250)
+rho = mg.Property("rho", vmin=1900, vmax=1900, texture=250)
+mort_terrain = mg.Lithology(name=name, properties=[vp, vs, rho])
+
 name = "Sediments"
-vp = mg.Property("vp", vmin=5278, vmax=5513, texture=150)
-vs = mg.Property("vs", vmin=5278 / 2, vmax=5513 / 2, texture=150)
-rho = mg.Property("rho", vmin=2811, vmax=2901, texture=150)
+vp = mg.Property("vp", vmin=5278, vmax=5513, texture=250)
+vs = mg.Property("vs", vmin=5278 / 2, vmax=5513 / 2, texture=250)
+rho = mg.Property("rho", vmin=2811, vmax=2901, texture=250)
 Sediments = mg.Lithology(name=name, properties=[vp, vs, rho])
 
 name = "Sediments_graphiteux"
-vp = mg.Property("vp", vmin=5341, vmax=5685, texture=150)
-vs = mg.Property("vs", vmin=5341 / 2, vmax=5685 / 2, texture=150)
-rho = mg.Property("rho", vmin=2773, vmax=22849, texture=150)
+vp = mg.Property("vp", vmin=5341, vmax=5685, texture=250)
+vs = mg.Property("vs", vmin=5341 / 2, vmax=5685 / 2, texture=250)
+rho = mg.Property("rho", vmin=2773, vmax=22849, texture=250)
 Sediments_graphiteux = mg.Lithology(name=name, properties=[vp, vs, rho])
 
 name = "Basaltes"
-vp = mg.Property("vp", vmin=5899, vmax=6299, texture=150)
-vs = mg.Property("vs", vmin=5899 / 2, vmax=6299 / 2, texture=150)
-rho = mg.Property("rho", vmin=2855, vmax=3255, texture=150)
+vp = mg.Property("vp", vmin=5899, vmax=6299, texture=70)
+vs = mg.Property("vs", vmin=5899 / 2, vmax=6299 / 2, texture=70)
+rho = mg.Property("rho", vmin=2855, vmax=3255, texture=70)
 basaltes = mg.Lithology(name=name, properties=[vp, vs, rho])
+
+# Basalte intercale de sediments graphiteux du membre central de la Formation
+# de Beauparlant.
+
+name = "Basaltes_sed"
+vp = mg.Property("vp", vmin=5341, vmax=6299, texture=1000)
+vs = mg.Property("vs", vmin=5341 / 2, vmax=6299 / 2, texture=1000)
+rho = mg.Property("rho", vmin=2773, vmax=3255, texture=1000)
+basaltes_sed = mg.Lithology(name=name, properties=[vp, vs, rho])
 
 # Definition des sequences
 
@@ -40,13 +55,13 @@ sequence_beauparlant_superieur = mg.Sequence(lithologies=[basaltes,
 sequence = mg.Sequence(lithologies=[Sediments,
                                     Sediments,
                                     basaltes,
-                                    basaltes,
+                                    basaltes_sed,
                                     basaltes,
                                     Sediments,
                                     Sediments,
                                     Sediments,
                                     basaltes,
-                                    basaltes,
+                                    basaltes_sed,
                                     basaltes],
                        ordered=True)
 
@@ -86,6 +101,8 @@ beauparlant_superieur = lirefichier('BEAUPARLANT_SUPERIEUR_TOP.dat')
 beauparlant_centre = lirefichier("BEAUPARLANT_CENTRE_TOP.dat")
 beauparlant_inferieur = lirefichier("BEAUPARLANT_INFERIEUR_TOP.dat")
 
+# Frontieres
+
 unites = [debut_leve,
           nuvilik_pli_top,
           beauparlant_superieur_pli,
@@ -116,8 +133,10 @@ texture_trends = [None,
                   beauparlant_centre,
                   beauparlant_inferieur
                   ]
+# Plus c'est petit, plus c'est continu
 gen.texture_xrange = 3
-gen.texture_zrange = 0.25 * gen.NZ
+
+gen.texture_zrange = 800
 
 props2d, layerids, layers = gen.generate_model(strati,
                                                boundaries=bnds,
@@ -128,4 +147,3 @@ np.savez("proprietes2d", props2d)
 gen.plot_model(props2d, layers)
 plt.savefig("props2dfig")
 plt.show()
-

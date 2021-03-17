@@ -17,15 +17,12 @@ seis.csts['N'] = np.array([np.size(props2d["vp"], 0),
                            np.size(props2d["vp"], 1)])
 seis.csts['dh'] = dh = 2.5
 # Time step size
-seis.csts['dt'] = dt = 0.000190
+seis.csts['dt'] = dt = 0.000150
 # Number of time steps
 seis.csts['NT'] = NT = 25000
 seis.f0 = 26
-# Nombre de mécanismes de Maxwell.
-seis.L = 2
-seis.FL = np.array([seis.f0, seis.f0])
 # Free surface
-# seis.csts['freesurf'] = 1
+seis.csts['freesurf'] = 1
 
 # Parametres du modele.
 

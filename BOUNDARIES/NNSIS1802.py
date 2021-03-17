@@ -11,31 +11,39 @@ directory = "/data/jgendreau/NNSIS1802/BOUNDARIES/"
 
 # Define lithologies
 
+Q_mt = 5
+Q_roche = 200
+
 # Supposons un ratio vp/vs = 2
 
 name = "Mort-terrain"
 vp = mg.Property("vp", vmin=3700, vmax=3700, texture=200)
 vs = mg.Property("vs", vmin=1600, vmax=1600, texture=250)
 rho = mg.Property("rho", vmin=1900, vmax=1900, texture=250)
-mort_terrain = mg.Lithology(name=name, properties=[vp, vs, rho])
+taup = mg.Property("taup", vmin=2/Q_mt, vmax=2/Q_mt, texture=0)
+taus = mg.Property("taus", vmin=2/Q_mt, vmax=2/Q_mt, texture=0)
+mort_terrain = mg.Lithology(name=name, properties=[vp, vs, rho, taup, taus])
 
 name = "Sediments"
 vp = mg.Property("vp", vmin=5278, vmax=5513, texture=250)
 vs = mg.Property("vs", vmin=5278 / 2, vmax=5513 / 2, texture=250)
 rho = mg.Property("rho", vmin=2811, vmax=2901, texture=250)
-Sediments = mg.Lithology(name=name, properties=[vp, vs, rho])
+taup = mg.Property("taup", vmin=2/Q_roche, vmax=2/Q_roche, texture=0)
+taus = mg.Property("taus", vmin=2/Q_roche, vmax=2/Q_roche, texture=0)
+Sediments = mg.Lithology(name=name, properties=[vp, vs, rho, taup, taus])
 
 name = "Sediments_graphiteux"
 vp = mg.Property("vp", vmin=5341, vmax=5685, texture=250)
 vs = mg.Property("vs", vmin=5341 / 2, vmax=5685 / 2, texture=250)
 rho = mg.Property("rho", vmin=2773, vmax=22849, texture=250)
-Sediments_graphiteux = mg.Lithology(name=name, properties=[vp, vs, rho])
+Sediments_graphiteux = mg.Lithology(name=name, properties=[vp, vs, rho,
+                                                           taup, taus])
 
 name = "Basaltes"
 vp = mg.Property("vp", vmin=5899, vmax=6299, texture=70)
 vs = mg.Property("vs", vmin=5899 / 2, vmax=6299 / 2, texture=70)
 rho = mg.Property("rho", vmin=2855, vmax=3255, texture=70)
-basaltes = mg.Lithology(name=name, properties=[vp, vs, rho])
+basaltes = mg.Lithology(name=name, properties=[vp, vs, rho, taup, taus])
 
 # Basalte intercale de sediments graphiteux du membre central de la Formation
 # de Beauparlant.
@@ -44,7 +52,7 @@ name = "Basaltes_sed"
 vp = mg.Property("vp", vmin=5341, vmax=6299, texture=1000)
 vs = mg.Property("vs", vmin=5341 / 2, vmax=6299 / 2, texture=1000)
 rho = mg.Property("rho", vmin=2773, vmax=3255, texture=1000)
-basaltes_sed = mg.Lithology(name=name, properties=[vp, vs, rho])
+basaltes_sed = mg.Lithology(name=name, properties=[vp, vs, rho, taup, taus])
 
 # Definition des sequences
 
@@ -52,7 +60,8 @@ sequence_beauparlant_superieur = mg.Sequence(lithologies=[basaltes,
                                                           Sediments_graphiteux]
                                              )
 
-sequence = mg.Sequence(lithologies=[Sediments,
+sequence = mg.Sequence(lithologies=[mort_terrain,
+                                    Sediments,
                                     Sediments,
                                     basaltes,
                                     basaltes_sed,
@@ -89,6 +98,7 @@ def lirefichier(filename):
     return bnd
 
 
+top = x * 0
 debut_leve = x * 0 + 200 / gen.dh
 nuvilik_pli_top = lirefichier("NUVILIK_PLI_TOP.dat")
 beauparlant_superieur_pli = lirefichier("BEAUPARLANT_SUPERIEUR_PLI_TOP.dat")
@@ -103,7 +113,8 @@ beauparlant_inferieur = lirefichier("BEAUPARLANT_INFERIEUR_TOP.dat")
 
 # Frontieres
 
-unites = [debut_leve,
+unites = [top,
+          debut_leve,
           nuvilik_pli_top,
           beauparlant_superieur_pli,
           beauparlant_centre_pli,
@@ -122,6 +133,7 @@ bnds = unites
 bnds = [b.astype(int) for b in bnds]
 
 texture_trends = [None,
+                  top,
                   nuvilik_pli_top,
                   beauparlant_superieur_pli,
                   beauparlant_centre_pli,
@@ -143,7 +155,12 @@ props2d, layerids, layers = gen.generate_model(strati,
                                                texture_trends=texture_trends
                                                )
 
-np.savez("proprietes2d", props2d)
+np.save("proprietes2d_vp", props2d["vp"])
+np.save("proprietes2d_vs", props2d["vs"])
+np.save("proprietes2d_rho", props2d["rho"])
+np.save("proprietes2d_taup", props2d["taup"])
+np.save("proprietes2d_taus", props2d["taus"])
+
 gen.plot_model(props2d, layers)
 plt.savefig("props2dfig")
 plt.show()

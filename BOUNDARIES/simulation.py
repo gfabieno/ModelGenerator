@@ -22,8 +22,10 @@ seis.csts['dt'] = dt = 0.000190
 seis.csts['NT'] = NT = 25000
 seis.f0 = 26
 # Nombre de mécanismes de Maxwell.
-seis.L = 1
-seis.FL = np.array([seis.f0])
+seis.L = 2
+seis.FL = np.array([seis.f0, seis.f0])
+# Free surface
+# seis.csts['freesurf'] = 1
 
 # Parametres du modele.
 

@@ -3,25 +3,35 @@ import matplotlib.pyplot as plt
 from SeisCL import SeisCL
 seis = SeisCL()
 
-props2d = np.load("proprietes2d.npy", allow_pickle=True)[()]
+props2d = {"vp": np.load("proprietes2d_vp.npy"),
+           "vs": np.load("proprietes2d_vs.npy"),
+           "rho": np.load("proprietes2d_rho.npy"),
+           "taup": np.load("proprietes2d_taup.npy"),
+           "taus": np.load("proprietes2d_taus.npy")}
+
 # Domaine de la simulation
-seis.csts['ND'] = 2                                 # Number of dimension
-seis.csts['N'] = np.array([np.size(props2d['vp'], 0), np.size(props2d["vp"],
-                                                              1)])
-seis.csts['dh'] = dh = 2.5                            # Grid spatial spacing
-seis.csts['dt'] = dt = 0.0002                     # Time step size
-seis.csts['NT'] = NT = 25000                         # Number of time steps
+# Number of dimension
+seis.csts['ND'] = 2
+# Grid spatial spacing
+seis.csts['N'] = np.array([np.size(props2d["vp"], 0),
+                           np.size(props2d["vp"], 1)])
+seis.csts['dh'] = dh = 2.5
+# Time step size
+seis.csts['dt'] = dt = 0.000190
+# Number of time steps
+seis.csts['NT'] = NT = 25000
 seis.f0 = 26
-seis.L = 1 # Nombre de mécanismes de Maxwell.
+# Nombre de mécanismes de Maxwell.
+seis.L = 1
 seis.FL = np.array([seis.f0])
 
 # Parametres du modele.
 
-model_dict = {"vp": props2d['vp'][:np.size(props2d['vp'], 0), :np.size(
-    props2d['vp'], 1)], "vs": props2d['vs'][:np.size(props2d['vp'], 0),
-                              :np.size(props2d['vp'], 1)],
-              "rho": props2d['rho'][:np.size(props2d['vp'], 0), :np.size(
-                  props2d['vp'], 1)], }
+model_dict = {"vp": props2d['vp'],
+              "vs": props2d['vs'],
+              "rho": props2d['rho'],
+              "taup": props2d['taup'],
+              "taus": props2d['taus']}
 
 
 # Sources
@@ -58,11 +68,11 @@ seis.set_forward(gsid, model_dict, withgrad=False)
 seis.execute()
 # Lecture du fichier de données
 datafd = seis.read_data()
-
+np.save("simulation.py",datafd)
 # Visualization
 
 figure = plt.figure()
-clip = 0.0001
+clip = 0.01
 extent = [min(seis.rec_pos_all[0]), max(seis.rec_pos_all[0]), NT*dt, 0]
 vmax = np.max(datafd[1]) * clip
 vmin = -vmax

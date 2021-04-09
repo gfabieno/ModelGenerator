@@ -263,16 +263,17 @@ def model_with_skipped_sequence():
 
     vp = Property(name="vp", vmin=1000, vmax=1000)
     lith = Lithology(name='layer1', properties=[vp])
-    sequence1 = Sequence(lithologies=[lith], ordered=False)
+    sequence1 = Sequence(lithologies=[lith], ordered=False, thick_max=100)
 
     vp = Property(name="vp", vmin=3000, vmax=3000)
     lith = Lithology(name='layer2', properties=[vp])
-    sequence2 = Sequence(lithologies=[lith], ordered=False)
+    sequence2 = Sequence(lithologies=[lith], ordered=False, skipprob=0.5,
+                         thick_max=100)
 
     vp = Property(name="vp", vmin=4000, vmax=4000)
     lith = Lithology(name='layer3', properties=[vp])
     sequence3 = Sequence(lithologies=[lith],
-                         ordered=False)
+                         ordered=False, thick_max=100)
 
     strati = Stratigraphy(sequences=[sequence1, sequence2, sequence3])
 
@@ -282,7 +283,6 @@ def model_with_skipped_sequence():
     gen.dip_max = 20
     gen.num_layers = 0
     gen.layer_num_min = 5
-    gen.layer_dh_min = 10
     gen.animated_dataset(strati)
 
 if __name__ == "__main__":

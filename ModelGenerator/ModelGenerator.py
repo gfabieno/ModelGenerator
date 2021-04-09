@@ -363,6 +363,7 @@ class Sequence(object):
         self.thick_max = thick_max
         self.thick_min = thick_min
         self.deform = deform
+        self.skipprob = skipprob
 
     def __iter__(self):
         self.n = 0
@@ -370,6 +371,9 @@ class Sequence(object):
 
     def __next__(self):
         if self.n < self.nmax:
+            if self.n == 0:
+                if self.skipprob > np.random.rand():
+                    raise StopIteration
             if self.ordered:
                 out = self.lithologies[self.n]
             else:
@@ -466,16 +470,18 @@ class Stratigraphy(object):
         layers = []
         seqid = 0
         seqthick = 0
-        seqiter = iter(self.sequences[0])
+        sequences = [s for s in self.sequences if s.skipprob < np.random.rand()]
+        seqiter = iter(sequences[0])
+
         sthicks_min = [np.random.randint(s.thick_min, s.thick_max)
-                       for s in self.sequences]
+                       for s in sequences]
         sthicks_max = [np.random.randint(smin, s.thick_max)
-                       for s, smin in zip(self.sequences, sthicks_min)]
+                       for s, smin in zip(sequences, sthicks_min)]
         sthicks_min[-1] = sthicks_max[-1] = 1e09
 
-        seq = self.sequences[0]
+        seq = sequences[0]
         lith = None
-        properties = [0.0 for _ in self.sequences[0].lithologies[0]]
+        properties = [0.0 for _ in sequences[0].lithologies[0]]
         seq_nlay = 0
         for ii, (t, di) in enumerate(zip(thicks, dips)):
             seqthick0 = seqthick
@@ -483,10 +489,10 @@ class Stratigraphy(object):
             if seq_nlay >= seq.nmin and (seqthick0 > sthicks_min[seqid]
                                          or seqthick >= sthicks_max[seqid]):
                 seq_nlay = 0
-                if seqid < len(self.sequences) - 1:
+                if seqid < len(sequences) - 1:
                     seqid += 1
-                    seqiter = iter(self.sequences[seqid])
-                    seq = self.sequences[seqid]
+                    seqiter = iter(sequences[seqid])
+                    seq = sequences[seqid]
             seq_nlay += 1
             lith0 = lith
             lith = next(seqiter)

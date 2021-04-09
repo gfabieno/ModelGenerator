@@ -371,9 +371,6 @@ class Sequence(object):
 
     def __next__(self):
         if self.n < self.nmax:
-            if self.n == 0:
-                if self.skipprob > np.random.rand():
-                    raise StopIteration
             if self.ordered:
                 out = self.lithologies[self.n]
             else:

@@ -341,6 +341,7 @@ class Sequence(object):
                      sequence, when ordered is False.
         :param deform: A Deformation object that generate random deformation of
                        a boundary
+        :param skipprob: The probability that this sequence is skipped
         """
 
         self.name = name

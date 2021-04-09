@@ -251,7 +251,7 @@ class Property(object):
 
     def __init__(self, name="Default", vmin=1000, vmax=5000, texture=0,
                  trend_min=0, trend_max=0, gradx_min=0, gradx_max=0,
-                 dzmax=None):
+                 dzmax=None, filter_decrease=False):
         """
         A Property is used to describe one material property of a Lithology
         object, and provides the maximum and minimum value that can take
@@ -269,6 +269,8 @@ class Property(object):
         :param gradx_max: Maximum value of the linear trend in x within a layer
         :param dzmax: Maximum change between two consecutive layers with
                       the same lithology
+        :param filter_decrease: If true, accept a decrease of this property
+                                according to the Sequence accept_decrease value
         """
 
         self.name = name
@@ -280,6 +282,7 @@ class Property(object):
         self.gradx_min = gradx_min
         self.gradx_max = gradx_max
         self.dzmax = dzmax
+        self.filter_decrease = filter_decrease
 
 
 class Lithology(object):
@@ -318,7 +321,7 @@ class Sequence(object):
 
     def __init__(self, name="Default", lithologies=None, ordered=False,
                  proportions=None, thick_min=0, thick_max=1e12, nmax=9999,
-                 nmin=1, deform=None, skipprob=0):
+                 nmin=1, deform=None, skip_prob=0, accept_decrease=1):
         """
         A Sequence object gives a sequence of Lithology objects. It can be
         ordered or random, meaning that when iterated upon, the Sequence object
@@ -341,7 +344,10 @@ class Sequence(object):
                      sequence, when ordered is False.
         :param deform: A Deformation object that generate random deformation of
                        a boundary
-        :param skipprob: The probability that this sequence is skipped
+        :param skip_prob: The probability that this sequence is skipped
+        :param accept_decrease: The probability to accept a decrease of a
+                               property, for properties with
+                               filter_decrease=True
         """
 
         self.name = name
@@ -363,7 +369,8 @@ class Sequence(object):
         self.thick_max = thick_max
         self.thick_min = thick_min
         self.deform = deform
-        self.skipprob = skipprob
+        self.skipprob = skip_prob
+        self.accept_decrease = accept_decrease
 
     def __iter__(self):
         self.n = 0
@@ -466,6 +473,7 @@ class Stratigraphy(object):
 
         layers = []
         seqid = 0
+        seqid0 = 0
         seqthick = 0
         sequences = [s for s in self.sequences if s.skipprob < np.random.rand()]
         seqiter = iter(sequences[0])
@@ -487,6 +495,7 @@ class Stratigraphy(object):
                                          or seqthick >= sthicks_max[seqid]):
                 seq_nlay = 0
                 if seqid < len(sequences) - 1:
+                    seqid0 = seqid
                     seqid += 1
                     seqiter = iter(sequences[seqid])
                     seq = sequences[seqid]
@@ -510,6 +519,12 @@ class Stratigraphy(object):
                 else:
                     minval = prop.min
                     maxval = prop.max
+                if seqid == seqid0 and seq.accept_decrease < np.random.rand():
+                    if prop.filter_decrease:
+                        minval = properties[jj]
+                        if maxval < minval:
+                            maxval = minval
+
                 properties[jj] = np.random.uniform(minval, maxval)
 
             layers.append(Layer(ii, t, di, seq, lith, gradx=gradx,

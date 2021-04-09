@@ -267,7 +267,7 @@ def model_with_skipped_sequence():
 
     vp = Property(name="vp", vmin=3000, vmax=3000)
     lith = Lithology(name='layer2', properties=[vp])
-    sequence2 = Sequence(lithologies=[lith], ordered=False, skipprob=0.5,
+    sequence2 = Sequence(lithologies=[lith], ordered=False, skip_prob=0.5,
                          thick_max=100)
 
     vp = Property(name="vp", vmin=4000, vmax=4000)
@@ -284,6 +284,30 @@ def model_with_skipped_sequence():
     gen.num_layers = 0
     gen.layer_num_min = 5
     gen.animated_dataset(strati)
+
+
+def model_with_increasing_property():
+    """
+    Example showing how to prevent too many property inversion with the
+    Property arguments dzmax and  filter_decrease and the Sequence
+    argument accept_decrease
+    """
+
+    vp = Property(name="vp", vmin=1000, vmax=4000,
+                  dzmax=1000, filter_decrease=True)
+    lith = Lithology(name='layer', properties=[vp])
+    sequence = Sequence(lithologies=[lith], ordered=False, accept_decrease=0.5)
+
+    strati = Stratigraphy(sequences=[sequence])
+
+    gen = ModelGenerator()
+    gen.layer_dh_min = 20
+    gen.num_layers = 0
+    gen.dip_max = 20
+    gen.num_layers = 0
+    gen.layer_num_min = 5
+    gen.animated_dataset(strati)
+
 
 if __name__ == "__main__":
 

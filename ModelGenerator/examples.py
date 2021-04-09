@@ -255,6 +255,35 @@ def model_with_texture_trend():
     gen.plot_model(props2d, layers)
     plt.show()
 
+def model_with_skipped_sequence():
+    """
+    Example showing how we can include a sequence with a probability of being
+    absent.
+    """
+
+    vp = Property(name="vp", vmin=1000, vmax=1000)
+    lith = Lithology(name='layer1', properties=[vp])
+    sequence1 = Sequence(lithologies=[lith], ordered=False)
+
+    vp = Property(name="vp", vmin=3000, vmax=3000)
+    lith = Lithology(name='layer2', properties=[vp])
+    sequence2 = Sequence(lithologies=[lith], ordered=False)
+
+    vp = Property(name="vp", vmin=4000, vmax=4000)
+    lith = Lithology(name='layer3', properties=[vp])
+    sequence3 = Sequence(lithologies=[lith],
+                         ordered=False)
+
+    strati = Stratigraphy(sequences=[sequence1, sequence2, sequence3])
+
+    gen = ModelGenerator()
+    gen.layer_dh_min = 20
+    gen.num_layers = 0
+    gen.dip_max = 20
+    gen.num_layers = 0
+    gen.layer_num_min = 5
+    gen.layer_dh_min = 10
+    gen.animated_dataset(strati)
 
 if __name__ == "__main__":
 

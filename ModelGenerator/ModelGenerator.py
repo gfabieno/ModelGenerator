@@ -318,7 +318,7 @@ class Sequence(object):
 
     def __init__(self, name="Default", lithologies=None, ordered=False,
                  proportions=None, thick_min=0, thick_max=1e12, nmax=9999,
-                 nmin=1, deform=None):
+                 nmin=1, deform=None, skipprob=0):
         """
         A Sequence object gives a sequence of Lithology objects. It can be
         ordered or random, meaning that when iterated upon, the Sequence object

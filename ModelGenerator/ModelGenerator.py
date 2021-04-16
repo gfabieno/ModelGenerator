@@ -521,7 +521,8 @@ class Stratigraphy(object):
                     maxval = prop.max
                 if seqid == seqid0 and seq.accept_decrease < np.random.rand():
                     if prop.filter_decrease:
-                        minval = properties[jj]
+                        if prop.min <= properties[jj]:
+                            minval = properties[jj]
                         if maxval < minval:
                             maxval = minval
 

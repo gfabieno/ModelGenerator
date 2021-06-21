@@ -516,6 +516,10 @@ class Stratigraphy(object):
                 if prop.dzmax is not None and lith0 == lith:
                     minval = properties[jj] - prop.dzmax
                     maxval = properties[jj] + prop.dzmax
+                    if minval < prop.min:
+                        minval = prop.min
+                    if maxval > prop.max:
+                        maxval = prop.max
                 else:
                     minval = prop.min
                     maxval = prop.max

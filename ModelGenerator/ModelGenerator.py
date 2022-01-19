@@ -513,7 +513,7 @@ class Stratigraphy(object):
                 gradx = gradxs[ii]
 
             for jj, prop in enumerate(lith):
-                if prop.dzmax is not None and lith0 == lith:
+                if prop.dzmax is not None and lith0 is not None:
                     minval = properties[jj] - prop.dzmax
                     maxval = properties[jj] + prop.dzmax
                     if minval < prop.min:

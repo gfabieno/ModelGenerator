@@ -901,3 +901,9 @@ class ModelGenerator:
             anim.save(filename + ".mp4", writer=writer)
 
         plt.show()
+
+
+if __name__ == '__main__':
+    gen = ModelGenerator()
+    stratigraphy = Stratigraphy()
+    gen.animated_dataset(stratigraphy)

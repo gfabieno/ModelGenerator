@@ -218,6 +218,10 @@ def gridded_model(nx, nz, layers, lz, lx, corr):
                 top = 2 * nz - int(np.max(texture_trend)) - nz
         else:
             texture_trend = None
+
+        if isinstance(layer.lithology, Diapir):
+            layer.lithology.add_diapir(layer)
+
         for jj, z in enumerate(layer.boundary):
             for n in range(npar):
                 prop = layer.properties[n]
@@ -594,6 +598,34 @@ class Deformation:
                 deform = deform / ddeform * self.amp_max * np.random.rand()
 
         return deform
+
+
+class Diapir(Lithology):
+
+    def __init__(self, *args, height_min=0, height_max=1, width_min=0,
+                 width_max=1, prob=0, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.height_min = height_min
+        self.height_max = height_max
+        self.width_min = width_min
+        self.width_max = width_max
+        self.prob = prob
+
+    def add_diapir(self, layer):
+        if np.random.random_sample() > self.prob:
+            return
+        nx = len(layer.boundary)
+        width = np.random.randint(self.width_min, self.width_max)
+        height = np.random.randint(self.height_min, self.height_max)
+        x_start = np.random.randint(nx-2*width)
+        x_end = x_start + 2*width
+
+        k = 10**np.random.uniform(.5, 1.5)
+        x = np.linspace(0, 2*np.pi, 2*width+1)
+        diapir = (1-np.arctan(k*np.cos(x))/np.arctan(k)) / 2
+        diapir *= height
+        layer.boundary[x_start:x_end+1] -= diapir.astype(int)
+        layer.boundary = np.clip(layer.boundary, 0, None)
 
 
 class ModelGenerator:

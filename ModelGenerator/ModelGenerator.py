@@ -448,7 +448,7 @@ class Stratigraphy(object):
 
         :return:
             props: A dict containing all properties contained in Stratigraphy
-                   with minimum and maximum values {pro_name: [min, max]
+                   with minimum and maximum values {p.name: [min, max]}.
         """
         props = {p.name: [9999, 0]
                  for p in self.sequences[0].lithologies[0]}

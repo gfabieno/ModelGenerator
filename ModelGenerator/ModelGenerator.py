@@ -602,7 +602,16 @@ class Deformation:
 class Diapir(Lithology):
 
     def __init__(self, *args, height_min=0, height_max=1, width_min=0,
-                 width_max=1, prob=0, **kwargs):
+                 width_max=1, prob=1, **kwargs):
+        """
+        Add a diapir-shaped deformation to layer boundaries.
+
+        :param height_min: Minimum height, in grid cell units.
+        :param height_max: Maximum height, in grid cell units.
+        :param width_min: Minimum width at half-maximum, in grid cell units.
+        :param width_max: Maximum width at half-maximum, in grid cell units.
+        :param prob: Probability of adding a diapir to a layer.
+        """
         super().__init__(*args, **kwargs)
         self.height_min = height_min
         self.height_max = height_max

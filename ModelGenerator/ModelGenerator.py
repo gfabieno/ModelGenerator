@@ -92,7 +92,6 @@ def random_thicks(nz, thickmin, thickmax, nmin, nlayer,
     else:
         nlayer = int(np.clip(nlayer, nlmin, nlmax))
 
-    amp = (thickmax - thickmin)
     thicks = np.random.uniform(thickmin, thickmax,
                                size=[nlayer]).astype(np.int)
 
@@ -324,6 +323,7 @@ class Lithology(object):
 class Sequence(object):
 
     def __init__(self, name="Default", lithologies=None, ordered=False,
+                 proportions=None, thick_min=0, thick_max=1e12, nmax=9999,
                  nmin=1, deform=None, skip_prob=0, accept_decrease=1):
         """
         A Sequence object gives a sequence of Lithology objects. It can be

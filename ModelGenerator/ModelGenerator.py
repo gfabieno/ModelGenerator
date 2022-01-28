@@ -610,6 +610,12 @@ class Faults:
                           displacement brings the top layer upwards.
         :param displ_max: Maximum absolute displacement, in meters. A positive
                           displacement brings the top layer upwards.
+        :param dh: Grid cell size, in meters.
+        :param x_lim: Bounds `[x_min, x_max]` of the fault origin location.
+                      Defaults to the model's boundaries.
+        :param y_lim: Bounds `[y_min, y_max]` of the fault origin location.
+                      Defaults to the model's boundaries. `y` is measured from
+                      the surface.
         :param nmax: Maximum quantity of faults.
         :param prob: Either the scalar probability of having at least one fault
                      or a list of probabilities for each quantity of faults
@@ -620,6 +626,8 @@ class Faults:
         self.dip_max = np.deg2rad(dip_max)
         self.displ_min = displ_min
         self.displ_max = displ_max
+        self.x_lim = x_lim
+        self.y_lim = y_lim
         self.dh = dh
         self.nmax = nmax
         if isinstance(prob, list):
@@ -644,12 +652,13 @@ class Faults:
         vdispl = int(round(vdispl))
         if vdispl == 0:
             return props2d, layerids
-        y_min = x_min = 0
-        y_max, x_max = layerids.shape
-        y = np.random.randint(y_min, y_max)
+
+        x_min, x_max = self.x_lim or (0, layerids.shape[0])
+        y_min, y_max = self.y_lim or (0, layerids.shape[1])
+        y = layerids.shape[1] - np.random.randint(y_min, y_max)
         x = np.random.randint(x_min, x_max)
 
-        grid_idx = np.meshgrid(np.arange(x_max), np.arange(y_max))
+        grid_idx = np.meshgrid(*(np.arange(s) for s in layerids.shape))
         grid_idx = np.array(grid_idx).reshape([2, -1]).T
         grid_idx -= [x, y]
         line_idx = np.cos(dip), np.sin(dip)
@@ -722,6 +731,9 @@ class ModelGenerator:
         self.fault_displ_min = 0
         # Maximum fault displacement.
         self.fault_displ_max = 0
+        # Bounds of the fault origin location.
+        self.fault_x_lim = [0, self.NX]
+        self.fault_y_lim = [0, self.NZ]
         # Maximum quantity of faults.
         self.fault_nmax = 1
         # Probability of having faults.

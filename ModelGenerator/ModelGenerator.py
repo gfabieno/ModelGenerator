@@ -597,8 +597,8 @@ class Deformation:
 
 class Faults:
 
-    def __init__(self, dip_min=0, dip_max=0, displ_max=0, dh=10.0, nmax=1,
-                 prob=0):
+    def __init__(self, dip_min=0, dip_max=0, displ_min=0, displ_max=0, dh=10.0,
+                 x_lim=None, y_lim=None, nmax=1, prob=0):
         """
         Create random faults in a 2D gridded model.
 
@@ -606,7 +606,10 @@ class Faults:
                         horizontal axis.
         :param dip_max: Maximum dip, as measured in degrees from the
                         horizontal axis.
-        :param displ_max: Maximum absolute displacement, in meters.
+        :param displ_min: Minimum absolute displacement, in meters. A positive
+                          displacement brings the top layer upwards.
+        :param displ_max: Maximum absolute displacement, in meters. A positive
+                          displacement brings the top layer upwards.
         :param nmax: Maximum quantity of faults.
         :param prob: Either the scalar probability of having at least one fault
                      or a list of probabilities for each quantity of faults
@@ -615,6 +618,7 @@ class Faults:
         """
         self.dip_min = np.deg2rad(dip_min)
         self.dip_max = np.deg2rad(dip_max)
+        self.displ_min = displ_min
         self.displ_max = displ_max
         self.dh = dh
         self.nmax = nmax
@@ -634,9 +638,9 @@ class Faults:
     def add_fault(self, props2d, layerids):
         dip = np.random.uniform(self.dip_min, self.dip_max)
         dip *= np.random.choice([-1, 1])
-        displ = np.random.uniform(-self.displ_max, self.displ_max)
+        displ = np.random.uniform(self.displ_min, self.displ_max)
         displ /= self.dh
-        vdispl = displ * np.sin(dip)
+        vdispl = displ * np.sin(abs(dip))
         vdispl = int(round(vdispl))
         if vdispl == 0:
             return props2d, layerids
@@ -649,20 +653,19 @@ class Faults:
         grid_idx = np.array(grid_idx).reshape([2, -1]).T
         grid_idx -= [x, y]
         line_idx = np.cos(dip), np.sin(dip)
-        is_over = np.cross(line_idx, grid_idx) > 0
+        is_over = np.cross(line_idx, grid_idx) < 0
         is_over = is_over.reshape(layerids.shape)
 
         arrays = [*props2d, layerids]
         for i, arr in enumerate(arrays):
-            if vdispl < 0:
-                vdispl = -vdispl
+            if vdispl > 0:
                 displ_arr = np.pad(arr, ((0, vdispl), (0, 0)), mode='edge')
                 displ_arr = displ_arr[vdispl:]
             else:
-                displ_arr = np.pad(arr, ((vdispl, 0), (0, 0)), mode='edge')
-                displ_arr = displ_arr[:-vdispl]
+                displ_arr = np.pad(arr, ((-vdispl, 0), (0, 0)), mode='edge')
+                displ_arr = displ_arr[:vdispl]
 
-            upper, lower = np.random.permutation([arr, displ_arr])
+            upper, lower = displ_arr, arr
             arrays[i] = np.where(is_over, upper, lower)
 
         *props2d, layerids = arrays
@@ -715,6 +718,8 @@ class ModelGenerator:
         self.fault_dip_min = 0
         # Maximum fault dip.
         self.fault_dip_max = 0
+        # Minimum fault displacement.
+        self.fault_displ_min = 0
         # Maximum fault displacement.
         self.fault_displ_max = 0
         # Maximum quantity of faults.
@@ -817,7 +822,9 @@ class ModelGenerator:
                                           self.texture_xrange,
                                           self.corr)
         faults = Faults(dip_min=self.fault_dip_min, dip_max=self.fault_dip_max,
+                        displ_min=self.fault_displ_min,
                         displ_max=self.fault_displ_max, dh=self.dh,
+                        x_lim=self.fault_x_lim, y_lim=self.fault_y_lim,
                         nmax=self.fault_nmax, prob=self.fault_prob)
         props2d, layerids = faults.add_faults(props2d, layerids)
 

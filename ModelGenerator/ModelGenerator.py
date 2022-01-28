@@ -653,12 +653,12 @@ class Faults:
         if vdispl == 0:
             return props2d, layerids
 
-        x_min, x_max = self.x_lim or (0, layerids.shape[0])
-        y_min, y_max = self.y_lim or (0, layerids.shape[1])
+        x_min, x_max = self.x_lim or (0, layerids.shape[1])
+        y_min, y_max = self.y_lim or (0, layerids.shape[0])
         y = layerids.shape[1] - np.random.randint(y_min, y_max)
         x = np.random.randint(x_min, x_max)
 
-        grid_idx = np.meshgrid(*(np.arange(s) for s in layerids.shape))
+        grid_idx = np.meshgrid(*(np.arange(s) for s in layerids.shape[::-1]))
         grid_idx = np.array(grid_idx).reshape([2, -1]).T
         grid_idx -= [x, y]
         line_idx = np.cos(dip), np.sin(dip)

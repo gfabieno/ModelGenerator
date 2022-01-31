@@ -655,7 +655,7 @@ class Faults:
 
         x_min, x_max = self.x_lim or (0, layerids.shape[1])
         y_min, y_max = self.y_lim or (0, layerids.shape[0])
-        y = layerids.shape[1] - np.random.randint(y_min, y_max)
+        y = layerids.shape[0] - np.random.randint(y_min, y_max)
         x = np.random.randint(x_min, x_max)
 
         grid_idx = np.meshgrid(*(np.arange(s) for s in layerids.shape[::-1]))

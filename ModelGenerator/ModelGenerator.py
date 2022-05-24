@@ -1,26 +1,28 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-    Class to generate seismic models and labels for training.
+Generate seismic models and labels for training.
 """
 
-import numpy as np
-from scipy.signal import gaussian
-import h5py as h5
-from prettytable import PrettyTable
-import matplotlib.pyplot as plt
-import matplotlib.animation as animation
 import copy
+
+import numpy as np
+import h5py as h5
+from scipy.signal import gaussian
+from prettytable import PrettyTable
+from matplotlib import pyplot as plt
+from matplotlib import animation
+
 
 class ModelGenerator:
     """
-    Generate a layered model with the generate_model method.
+    Generate a layered model.
+
     This class can read and write to a file the parameters needed to generate
-    random models
+    random models.
     """
 
     def __init__(self):
-
         # Number of grid cells in X direction.
         self.NX = 256
         # Number of grid cells in Z direction.
@@ -76,13 +78,9 @@ class ModelGenerator:
 
     def save_parameters_to_disk(self, filename):
         """
-        Save all parameters to disk
+        Save all parameters to disk.
 
-        @params:
-        filename (str) :  name of the file for saving parameters
-
-        @returns:
-
+        :param filename: Name of the file for saving parameters.
         """
         with h5.File(filename, 'w') as file:
             for item in self.__dict__:
@@ -90,13 +88,9 @@ class ModelGenerator:
 
     def read_parameters_from_disk(self, filename):
         """
-        Read all parameters from a file
+        Read all parameters from a file.
 
-        @params:
-        filename (str) :  name of the file containing parameters
-
-        @returns:
-
+        :param filename: Name of the file containing parameters.
         """
         with h5.File(filename, 'r') as file:
             for item in self.__dict__:
@@ -109,29 +103,27 @@ class ModelGenerator:
                        boundaries=None, gradxs=None, texture_trends=None,
                        seed=None):
         """
-
-        :param stratigraphy: A stratigraphy object
+        :param stratigraphy: A `Stratigraphy` object.
         :param thicks: A list of layer thicknesses. If not provided, create
                        random thicknesses. See ModelParameters for variables
                        controlling the random generation process.
         :param dips: A list of layer dips. If not provided, create
-                       random dips.
+                     random dips.
         :param boundaries: A list of arrays containing the position of the top
                            of the layers. If none, generated randomly
         :param gradxs: A list of the linear trend of each property in each layer
                        If None, no trend in x is added and if "random", create
                        random gradients in each layer.
         :param texture_trends: A list of the of array depicting the alignment of
-                              the texture within a layer. If None, will follow
-                              the top boundary of the layer.
-        :param seed: A seed for random generators
+                               the texture within a layer. If None, will follow
+                               the top boundary of the layer.
+        :param seed: A seed for random generators.
 
         :return:
-                props2d: A list of 2D property arrays
-                layerids: A 2D array containing layer ids
-                layers: A list of Layer objects
+            props2d: A list of 2D property arrays
+            layerids: A 2D array containing layer ids
+            layers: A list of Layer objects
         """
-
         if seed is not None:
             np.random.seed(seed)
 
@@ -177,16 +169,17 @@ class ModelGenerator:
 
     def plot_model(self, props2d, layers, animated=False, figsize=(16, 8)):
         """
-        Plot the properties of a generated gridded model
+        Plot the properties of a generated gridded model.
 
         :param props2d: The dictionary of properties from the output of
-                        generate_model
-        :param layers:  A list of layers from the output of  generate_model
-        :param animated: It true, the plot can be animated
-        :param figsize: A tuple providing the size of the figure to create
+                        generate_model.
+        :param layers: A list of layers from the output of generate_model.
+        :param animated: If true, the plot can be animated.
+        :param figsize: A tuple providing the size of the figure to create.
 
-        :return: ims: a list of pyplot images
-                 fig: A Figure object
+        :return:
+            ims: A list of `pyplot` images.
+            fig: A `Figure` object.
         """
         names = list(props2d.keys())
         minmax = {name: [np.inf, -np.inf] for name in names}
@@ -219,13 +212,12 @@ class ModelGenerator:
 
     def animated_dataset(self, *args, filename=None, nframes=1000, **kwargs):
         """
-        Produces an animation of a dataset, showing the input data, and the
-        different labels for each example.
+        Produce an animation of a dataset.
 
-        @params:
-        phase (str): Which dataset: either train, test or validate
+        Show the input data, and the different labels for each example.
+
+        :param phase: Which dataset, from either train, test or validate.
         """
-
         props2d, _, layers = self.generate_model(*args, **kwargs)
         names = list(props2d.keys())
         fig, ims = self.plot_model(props2d, layers, animated=True)
@@ -242,8 +234,8 @@ class ModelGenerator:
             return ims
 
         anim = animation.FuncAnimation(fig, animate, init_func=init,
-                                       frames=nframes, interval=3000, blit=True,
-                                       repeat=True)
+                                       frames=nframes, interval=3000,
+                                       blit=True, repeat=True)
         if filename:
             Writer = animation.writers['ffmpeg']
             writer = Writer(fps=1, metadata=dict(artist='ModelGenerator'),
@@ -257,8 +249,10 @@ class Stratigraphy(object):
 
     def __init__(self, sequences=None, defaultprops=None):
         """
-        A Stratigraphy is made up of a series of Sequences. When building
-        a model the layered model will contain the sequences in order.
+        A series of Sequences.
+
+        When building a model the layered model will contain the sequences in
+        order.
 
         :param sequences: A list of Sequence objects
         """
@@ -271,11 +265,10 @@ class Stratigraphy(object):
 
     def properties(self):
         """
-        Summarize the properties in Stratigraphy
+        Summarize the properties in Stratigraphy.
 
-        :return:
-            props: A dict containing all properties contained in Stratigraphy
-                   with minimum and maximum values {p.name: [min, max]}.
+        :return: A dict containing all properties contained in Stratigraphy
+                 with minimum and maximum values {p.name: [min, max]}.
         """
         props = {p.name: [9999, 0]
                  for p in self.sequences[0].lithologies[0]}
@@ -290,17 +283,18 @@ class Stratigraphy(object):
 
     def build_stratigraphy(self, thicks, dips, gradxs=None):
         """
-        Generate a sequence of Layer object that provides properties of each
-        layer in a stratigraphic column.
+        Generate a sequence of Layer objects.
 
-        :param thicks: A list of layer thicknesses
-        :param dips: A list of layer dips
-        :param gradxs: A list of the linear trend of each property in each layer
-                       If None, no trend in x is added and if "random", create
-                       random gradients in each layer.
-        :return:
+        Provide properties of each layer in a stratigraphic column.
+
+        :param thicks: A list of layer thicknesses.
+        :param dips: A list of layer dips.
+        :param gradxs: A list of the linear trend of each property in each
+                       layer. If None, no trend in x is added and if "random",
+                       create random gradients in each layer.
+
+        :return: A list of layer objects.
         """
-
         layers = []
         seqid = 0
         seqid0 = 0
@@ -388,33 +382,33 @@ class Sequence(object):
                  proportions=None, thick_min=0, thick_max=1e9, nmax=9999,
                  nmin=1, deform=None, skip_prob=0, accept_decrease=1):
         """
-        A Sequence object gives a sequence of Lithology objects. It can be
-        ordered or random, meaning that when iterated upon, the Sequence object
-        will provided either the given lithologies in order, or provide a
-        random draw of the lithologies, with a probability of a lithology to
-        be drawn given by proportions.
+        A sequence of Lithology objects.
 
-        :param name: Name of the sequence
-        :param lithologies: A list of Lithology objects
+        It can be ordered or random, meaning that when iterated upon, the
+        Sequence object will provide either the given lithologies in order, or
+        provide a random draw of the lithologies, with a probability of a
+        lithology to be drawn given by proportions.
+
+        :param name: Name of the sequence.
+        :param lithologies: A list of Lithology objects.
         :param ordered: If True, the Sequence provides the lithology in the
                         order within lithologies. If False, the Sequence
-                        provides random lithologies drawn from the list
+                        provides random lithologies drawn from the list.
         :param proportions: A list of proportions of each lithology in the
-                            sequence. Must sum to 1
-        :param thick_min: The minimum thickness of the sequence
-        :param thick_max: The maximum thickness of the sequence
+                            sequence. Must sum to 1.
+        :param thick_min: The minimum thickness of the sequence.
+        :param thick_max: The maximum thickness of the sequence.
         :param nmax: Maximum number of lithologies that can be drawn from a
                      sequence, when ordered is False.
         :param nmin: Minimum number of lithologies that can be drawn from a
                      sequence, when ordered is False.
         :param deform: A Deformation object that generate random deformation of
-                       a boundary
-        :param skip_prob: The probability that this sequence is skipped
+                       a boundary.
+        :param skip_prob: The probability that this sequence is skipped.
         :param accept_decrease: The probability to accept a decrease of a
-                               property, for properties with
-                               filter_decrease=True
+                                property, for properties with
+                                filter_decrease=True.
         """
-
         self.name = name
         if lithologies is None:
             lithologies = [Lithology()]
@@ -457,7 +451,8 @@ class Lithology(object):
 
     def __init__(self, name="Default", properties=None):
         """
-        A Lithology is a collection of Property objects.
+        A collection of Property objects.
+
         For example, a Lithology could be made up of vp and rho for an acoustic
         media and describe unconsolidated sediments seismic properties for a
         marine survey.
@@ -465,7 +460,6 @@ class Lithology(object):
         :param name: Name of a lithology
         :param properties: A list of Property objects
         """
-
         self.name = name
         if properties is None:
             properties = [Property()]
@@ -490,20 +484,20 @@ class Layer(object):
     def __init__(self, idnum, thick, dip, sequence, lithology, properties,
                  boundary=None, gradx=None, texture_trend=None):
         """
-        A Layer object describes a specific layer within a model, providing a
-        description of its lithology, its thickness, dip and the deformation of
-        its upper boundary.
+        A specific layer within a model.
 
-        :param idnum: The identification number of the layer
-        :param thick: The thickness of the layer
-        :param dip: The dip of the layer
-        :param sequence: A Sequence object to which the layer belongs
-        :param lithology: A Lithology object to which the layer belongs
-        :param properties: A list of value of the layer properties
-        :param boundary: An array of the position of the top of the layer
-        :param gradx: A list of horizontal increase of each property
+        Provide a description of its lithology, its thickness, dip and the
+        deformation of its upper boundary.
+
+        :param idnum: The identification number of the layer.
+        :param thick: The thickness of the layer.
+        :param dip: The dip of the layer.
+        :param sequence: A Sequence object to which the layer belongs.
+        :param lithology: A Lithology object to which the layer belongs.
+        :param properties: A list of value of the layer properties.
+        :param boundary: An array of the position of the top of the layer.
+        :param gradx: A list of horizontal increase of each property.
         """
-
         self.idnum = idnum
         self.thick = int(thick)
         self.dip = dip
@@ -525,14 +519,14 @@ class Deformation:
     def __init__(self, max_deform_freq=0, min_deform_freq=0, amp_max=0,
                  max_deform_nfreq=20, prob_deform_change=0.3, cumulative=False):
         """
-        Create random deformations of a boundary with random harmonic functions
+        Create random deformations of a boundary with harmonic functions.
 
-        :param max_deform_freq: Maximum frequency of the harmonic components
-        :param min_deform_freq: Minimum frequency of the harmonic components
-        :param amp_max: Maximum amplitude of the deformation
-        :param max_deform_nfreq: Number of frequencies
-        :param cumulative:      Bool, if True, deformation of consecutive layers
-                                are added together (are correlated).
+        :param max_deform_freq: Maximum frequency of the harmonic components.
+        :param min_deform_freq: Minimum frequency of the harmonic components.
+        :param amp_max: Maximum amplitude of the deformation.
+        :param max_deform_nfreq: Number of frequencies.
+        :param cumulative: If True, deformation of consecutive layers
+                           are added together (are correlated).
         """
         self.max_deform_freq = max_deform_freq
         self.min_deform_freq = min_deform_freq
@@ -543,11 +537,11 @@ class Deformation:
 
     def create_deformation(self, nx):
         """
-        Create random deformations of a boundary with random harmonic functions
-        :param nx: Number of points of the boundary
+        Create random deformations of a boundary with harmonic functions.
 
-        :return:
-        An array containing the deformation function
+        :param nx: Number of points of the boundary.
+
+        :return: An array containing the deformation function.
         """
         x = np.arange(0, nx)
         deform = np.zeros(nx)
@@ -707,26 +701,26 @@ class Property(object):
                  trend_min=0, trend_max=0, gradx_min=0, gradx_max=0,
                  dzmax=None, filter_decrease=False):
         """
-        A Property is used to describe one material property of a Lithology
-        object, and provides the maximum and minimum value that can take
-        the property within a Lithology.
-        For example, a Property could describe the P-wave velocity.
+        Describe one material property of a Lithology object.
 
-        :param name: Name of the property
-        :param vmin: Minimum value of the property
-        :param vmax: Maximum value of the property
+        Provides the maximum and minimum value that the property can take
+        within a Lithology. For example, a Property could describe the
+        P-wave velocity.
+
+        :param name: Name of the property.
+        :param vmin: Minimum value of the property.
+        :param vmax: Maximum value of the property.
         :param texture: Maximum percentage of change of random fluctuations
-                            within a layer of the property
-        :param trend_min: Minimum value of the linear trend in z within a layer
-        :param trend_max: Maximum value of the linear trend in z within a layer
-        :param gradx_min: Minimum value of the linear trend in x within a layer
-        :param gradx_max: Maximum value of the linear trend in x within a layer
+                        within a layer of the property.
+        :param trend_min: Minimum value of the linear trend in z in a layer.
+        :param trend_max: Maximum value of the linear trend in z in a layer.
+        :param gradx_min: Minimum value of the linear trend in x in a layer.
+        :param gradx_max: Maximum value of the linear trend in x in a layer.
         :param dzmax: Maximum change between two consecutive layers with
-                      the same lithology
+                      the same lithology.
         :param filter_decrease: If true, accept a decrease of this property
-                                according to the Sequence accept_decrease value
+                                according to the Sequence's accept_decrease.
         """
-
         self.name = name
         self.min = vmin
         self.max = vmax
@@ -742,23 +736,20 @@ class Property(object):
 def random_thicks(nz, thickmin, thickmax, nmin, nlayer,
                   thick0min=None, thick0max=None):
     """
-    Genereate a random sequence of layers with different thicknesses
+    Generate a random sequence of layers with different thicknesses.
 
-    :param nz: Number of points in Z of the grid
-    :param thickmin: Minimum thickness of a layer in grid point
-    :param thickmax: Maximum thickness of a layer in grid point
-    :param nmin: Minimum number of layers
+    :param nz: Number of points in Z of the grid.
+    :param thickmin: Minimum thickness of a layer in grid point.
+    :param thickmax: Maximum thickness of a layer in grid point.
+    :param nmin: Minimum number of layers.
     :param nlayer: The number of layers to create. If 0, draws a ramdom
-                        number of layers
+                   number of layers.
     :param thick0min: If provided, the first layer thickness is drawn between
-                      thick0min and thick0max
-    :param thick0max:
+                      thick0min and thick0max.
+    :param thick0max: See `thick0min`.
 
-    :return: A list containing the thicknesses of the layers
-
+    :return: A list containing the thicknesses of the layers.
     """
-
-    # Determine the minimum and maximum number of layers
     thickmax = np.min([int(nz / nmin), thickmax])
     if thickmax < thickmin:
         print("warning: maximum number of layers smaller than minimum")
@@ -786,16 +777,15 @@ def random_thicks(nz, thickmin, thickmax, nmin, nlayer,
 
 def random_dips(n_dips, dip_max, ddip_max, dip_0=True):
     """
-    Generate a random sequence of dips of layers
+    Generate a random sequence of dips of layers.
 
-    :param n_dips: Number of dips to generate
-    :param dip_max: Maximum dip
-    :param ddip_max: Maximum change of dip
-    :param dip_0: If true, the first dip is 0
+    :param n_dips: Number of dips to generate.
+    :param dip_max: Maximum dip.
+    :param ddip_max: Maximum change of dip.
+    :param dip_0: If true, the first dip is 0.
 
-    :return: A list containing the dips of the thicks
+    :return: A list containing the dips of the layers.
     """
-
     dips = np.zeros(n_dips)
     if not dip_0:
         dips[1] = np.random.uniform(-dip_max, dip_max)
@@ -809,13 +799,12 @@ def random_dips(n_dips, dip_max, ddip_max, dip_0=True):
 
 def generate_random_boundaries(nx, layers):
     """
-    Generate randomly a boundary for each layer, based on the thickness, dip
-    and deformation properties of the sequence to which a layer belong.
+    Randomly generate a boundary for each layer.
 
-    :param nx:
-    :param layers:
-    :return: layers: The list of layers with the boundary property filled
-                     randomly
+    Generation is based on the thickness, dip and deformation properties of the
+    sequence to which a layer belong.
+
+    :return: The list of layers with the boundary property filled randomly.
     """
     top = layers[0].thick
     seq = layers[0].sequence
@@ -847,17 +836,20 @@ def generate_random_boundaries(nx, layers):
 def gridded_model(nx, nz, layers, lz, lx, corr):
     """
     Generate a gridded model from a model depicted by a list of Layers objects.
-    Add a texture in each layer
 
-    :param nx: Grid size in X
-    :param nz: Grid size in Z
-    :param layers: A list of Layer objects
-    :param lz: The coherence length in z of the random heterogeneities
-    :param lx: The coherence length in x of the random heterogeneities
-    :param corr: Zero-lag correlation between each property
-    :return: A list of 2D grid of the properties and a grid of layer id numbers
+    Add a texture in each layer.
+
+    :param nx: Grid size in X.
+    :param nz: Grid size in Z.
+    :param layers: A list of Layer objects.
+    :param lz: The coherence length in z of the random heterogeneities.
+    :param lx: The coherence length in x of the random heterogeneities.
+    :param corr: Zero-lag correlation between each property.
+
+    :return:
+        props2d: A list of 2D grid of the properties.
+        layerids: A grid of layer id numbers.
     """
-
     # Generate the 2D model, from top thicks to bottom
     npar = len(layers[0].properties)
     props2d = [np.full([nz, nx], p) for p in layers[0].properties]
@@ -931,19 +923,15 @@ def gridded_model(nx, nz, layers, lz, lx, corr):
 
 def random_fields(nf, nz, nx, lz=2, lx=2, corr=None):
     """
-    Created a random model with bandwidth limited noise.
+    Create a random model with bandwidth limited noise.
 
-    @params:
-    nf (int): Number of fields to generate
-    nz (int): Number of cells in Z
-    nx (int): Number of cells in X
-    lz (int): High frequency cut-off size in z
-    lx (int): High frequency cut-off size in x
-    corr (float): Zero-lag correlation between 1 field and subsequent fields
-    @returns:
-
+    :param nf: Number of fields to generate.
+    :param nz: Number of cells in z.
+    :param nx: Number of cells in x.
+    :param lz: High frequency cut-off size in z.
+    :param lx: High frequency cut-off size in x.
+    :param corr: Zero-lag correlation between 1 field and subsequent fields.
     """
-
     corrs = [1.0] + [corr for _ in range(nf-1)]
 
     noise0 = np.random.random([nz, nx])

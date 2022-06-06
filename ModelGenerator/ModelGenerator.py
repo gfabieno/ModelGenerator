@@ -626,8 +626,14 @@ class Diapir(Lithology):
         if np.random.random_sample() > self.prob:
             return
         nx = len(layer.boundary)
-        width = np.random.randint(self.width_min, self.width_max)
-        height = np.random.randint(self.height_min, self.height_max)
+        if self.width_min != self.width_max:
+            width = np.random.randint(self.width_min, self.width_max)
+        else:
+            width = self.width_min
+        if self.height_min != self.height_max:
+            height = np.random.randint(self.height_min, self.height_max)
+        else:
+            height = self.height_min
         x_start = np.random.randint(nx-2*width)
         x_end = x_start + 2*width
 
@@ -699,6 +705,10 @@ class Faults:
 
         x_min, x_max = self.x_lim or (0, layerids.shape[1])
         y_min, y_max = self.y_lim or (0, layerids.shape[0])
+        if y_min == y_max:
+            y_max += 1
+        if x_min == x_max:
+            x_max += 1
         y = layerids.shape[0] - np.random.randint(y_min, y_max)
         x = np.random.randint(x_min, x_max)
 

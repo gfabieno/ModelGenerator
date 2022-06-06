@@ -202,7 +202,6 @@ def gridded_model(nx, nz, layers, lz, lx, corr):
                 props2d[n] += textures[n][:nz, :nx] * textamp
 
     for layer in layers[1:]:
-
         trends = [None for _ in range(npar)]
         if addtrend is not None:
             for n in range(npar):
@@ -320,7 +319,7 @@ class Lithology(object):
 class Sequence(object):
 
     def __init__(self, name="Default", lithologies=None, ordered=False,
-                 proportions=None, thick_min=0, thick_max=1e12, nmax=9999,
+                 proportions=None, thick_min=0, thick_max=1e9, nmax=9999,
                  nmin=1, deform=None, skip_prob=0, accept_decrease=1):
         """
         A Sequence object gives a sequence of Lithology objects. It can be
@@ -600,6 +599,92 @@ class Deformation:
         return deform
 
 
+class Faults:
+
+    def __init__(self, dip_min=0, dip_max=0, displ_min=0, displ_max=0, dh=10.0,
+                 x_lim=None, y_lim=None, nmax=1, prob=0):
+        """
+        Create random faults in a 2D gridded model.
+
+        :param dip_min: Minimum dip, as measured in degrees from the
+                        horizontal axis.
+        :param dip_max: Maximum dip, as measured in degrees from the
+                        horizontal axis.
+        :param displ_min: Minimum absolute displacement, in meters. A positive
+                          displacement brings the top layer upwards.
+        :param displ_max: Maximum absolute displacement, in meters. A positive
+                          displacement brings the top layer upwards.
+        :param dh: Grid cell size, in meters.
+        :param x_lim: Bounds `[x_min, x_max]` of the fault origin location.
+                      Defaults to the model's boundaries.
+        :param y_lim: Bounds `[y_min, y_max]` of the fault origin location.
+                      Defaults to the model's boundaries. `y` is measured from
+                      the surface.
+        :param nmax: Maximum quantity of faults.
+        :param prob: Either the scalar probability of having at least one fault
+                     or a list of probabilities for each quantity of faults
+                     in `range(1, nmax+1)`. In either case, the remaining
+                     probability is associated to not having any fault.
+        """
+        self.dip_min = np.deg2rad(dip_min)
+        self.dip_max = np.deg2rad(dip_max)
+        self.displ_min = displ_min
+        self.displ_max = displ_max
+        self.x_lim = x_lim
+        self.y_lim = y_lim
+        self.dh = dh
+        self.nmax = nmax
+        if isinstance(prob, list):
+            assert len(prob) == nmax
+            prob = [1-sum(prob), *prob]
+        else:
+            prob = [1 - prob, *[prob/nmax]*nmax]
+        self.prob = prob
+
+    def add_faults(self, props2d, layerids):
+        n = np.random.choice(self.nmax+1, p=self.prob)
+        for _ in range(n):
+            props2d, layerids = self.add_fault(props2d, layerids)
+        return props2d, layerids
+
+    def add_fault(self, props2d, layerids):
+        dip = np.random.uniform(self.dip_min, self.dip_max)
+        dip *= np.random.choice([-1, 1])
+        displ = np.random.uniform(self.displ_min, self.displ_max)
+        displ /= self.dh
+        vdispl = displ * np.sin(abs(dip))
+        vdispl = int(round(vdispl))
+        if vdispl == 0:
+            return props2d, layerids
+
+        x_min, x_max = self.x_lim or (0, layerids.shape[1])
+        y_min, y_max = self.y_lim or (0, layerids.shape[0])
+        y = layerids.shape[0] - np.random.randint(y_min, y_max)
+        x = np.random.randint(x_min, x_max)
+
+        grid_idx = np.meshgrid(*(np.arange(s) for s in layerids.shape[::-1]))
+        grid_idx = np.array(grid_idx).reshape([2, -1]).T
+        grid_idx -= [x, y]
+        line_idx = np.cos(dip), np.sin(dip)
+        is_over = np.cross(line_idx, grid_idx) < 0
+        is_over = is_over.reshape(layerids.shape)
+
+        arrays = [*props2d, layerids]
+        for i, arr in enumerate(arrays):
+            if vdispl > 0:
+                displ_arr = np.pad(arr, ((0, vdispl), (0, 0)), mode='edge')
+                displ_arr = displ_arr[vdispl:]
+            else:
+                displ_arr = np.pad(arr, ((-vdispl, 0), (0, 0)), mode='edge')
+                displ_arr = displ_arr[:vdispl]
+
+            upper, lower = displ_arr, arr
+            arrays[i] = np.where(is_over, upper, lower)
+
+        *props2d, layerids = arrays
+        return props2d, layerids
+
+
 class ModelGenerator:
     """
     Generate a layered model with the generate_model method.
@@ -641,6 +726,22 @@ class ModelGenerator:
         self.texture_zrange = 0
         # Zero-lag correlation between parameters, same for each
         self.corr = 0.6
+
+        # Minimum fault dip.
+        self.fault_dip_min = 0
+        # Maximum fault dip.
+        self.fault_dip_max = 0
+        # Minimum fault displacement.
+        self.fault_displ_min = 0
+        # Maximum fault displacement.
+        self.fault_displ_max = 0
+        # Bounds of the fault origin location.
+        self.fault_x_lim = [0, self.NX]
+        self.fault_y_lim = [0, self.NZ]
+        # Maximum quantity of faults.
+        self.fault_nmax = 1
+        # Probability of having faults.
+        self.fault_prob = 0
 
         self.thick0min = None
         self.thick0max = None
@@ -736,6 +837,12 @@ class ModelGenerator:
                                           self.texture_zrange,
                                           self.texture_xrange,
                                           self.corr)
+        faults = Faults(dip_min=self.fault_dip_min, dip_max=self.fault_dip_max,
+                        displ_min=self.fault_displ_min,
+                        displ_max=self.fault_displ_max, dh=self.dh,
+                        x_lim=self.fault_x_lim, y_lim=self.fault_y_lim,
+                        nmax=self.fault_nmax, prob=self.fault_prob)
+        props2d, layerids = faults.add_faults(props2d, layerids)
 
         names = [prop.name for prop in layers[0].lithology]
         propdict = {name: prop for name, prop in zip(names, props2d)}
@@ -817,3 +924,9 @@ class ModelGenerator:
             anim.save(filename + ".mp4", writer=writer)
 
         plt.show()
+
+
+if __name__ == '__main__':
+    gen = ModelGenerator()
+    stratigraphy = Stratigraphy()
+    gen.animated_dataset(stratigraphy)

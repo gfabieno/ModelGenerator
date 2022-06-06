@@ -1,2 +1,2 @@
-from .ModelGenerator import Property, Lithology, Sequence, Layer, Stratigraphy
-from .ModelGenerator import ModelGenerator, Deformation
+from .ModelGenerator import (ModelGenerator, Property, Lithology, Sequence,
+                             Layer, Stratigraphy, Deformation, Diapir)

@@ -92,7 +92,6 @@ def random_thicks(nz, thickmin, thickmax, nmin, nlayer,
     else:
         nlayer = int(np.clip(nlayer, nlmin, nlmax))
 
-    amp = (thickmax - thickmin)
     thicks = np.random.uniform(thickmin, thickmax,
                                size=[nlayer]).astype(np.int)
 
@@ -217,6 +216,10 @@ def gridded_model(nx, nz, layers, lz, lx, corr):
                 top = 2 * nz - int(np.max(texture_trend)) - nz
         else:
             texture_trend = None
+
+        if isinstance(layer.lithology, Diapir):
+            layer.lithology.add_diapir(layer)
+
         for jj, z in enumerate(layer.boundary):
             for n in range(npar):
                 prop = layer.properties[n]
@@ -444,7 +447,7 @@ class Stratigraphy(object):
 
         :return:
             props: A dict containing all properties contained in Stratigraphy
-                   with minimum and maximum values {pro_name: [min, max]
+                   with minimum and maximum values {p.name: [min, max]}.
         """
         props = {p.name: [9999, 0]
                  for p in self.sequences[0].lithologies[0]}
@@ -599,6 +602,49 @@ class Deformation:
         return deform
 
 
+class Diapir(Lithology):
+
+    def __init__(self, *args, height_min=0, height_max=1, width_min=0,
+                 width_max=1, prob=1, **kwargs):
+        """
+        Add a diapir-shaped deformation to layer boundaries.
+
+        :param height_min: Minimum height, in grid cell units.
+        :param height_max: Maximum height, in grid cell units.
+        :param width_min: Minimum width at half-maximum, in grid cell units.
+        :param width_max: Maximum width at half-maximum, in grid cell units.
+        :param prob: Probability of adding a diapir to a layer.
+        """
+        super().__init__(*args, **kwargs)
+        self.height_min = height_min
+        self.height_max = height_max
+        self.width_min = width_min
+        self.width_max = width_max
+        self.prob = prob
+
+    def add_diapir(self, layer):
+        if np.random.random_sample() > self.prob:
+            return
+        nx = len(layer.boundary)
+        if self.width_min != self.width_max:
+            width = np.random.randint(self.width_min, self.width_max)
+        else:
+            width = self.width_min
+        if self.height_min != self.height_max:
+            height = np.random.randint(self.height_min, self.height_max)
+        else:
+            height = self.height_min
+        x_start = np.random.randint(nx-2*width)
+        x_end = x_start + 2*width
+
+        k = 10**np.random.uniform(.5, 1.5)
+        x = np.linspace(0, 2*np.pi, 2*width+1)
+        diapir = (1-np.arctan(k*np.cos(x))/np.arctan(k)) / 2
+        diapir *= height
+        layer.boundary[x_start:x_end+1] -= diapir.astype(int)
+        layer.boundary = np.clip(layer.boundary, 0, None)
+
+
 class Faults:
 
     def __init__(self, dip_min=0, dip_max=0, displ_min=0, displ_max=0, dh=10.0,
@@ -659,6 +705,10 @@ class Faults:
 
         x_min, x_max = self.x_lim or (0, layerids.shape[1])
         y_min, y_max = self.y_lim or (0, layerids.shape[0])
+        if y_min == y_max:
+            y_max += 1
+        if x_min == x_max:
+            x_max += 1
         y = layerids.shape[0] - np.random.randint(y_min, y_max)
         x = np.random.randint(x_min, x_max)
 

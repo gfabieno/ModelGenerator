@@ -111,12 +111,12 @@ class ModelGenerator:
                      random dips.
         :param boundaries: A list of arrays containing the position of the top
                            of the layers. If none, generated randomly
-        :param gradxs: A list of the linear trend of each property in each layer
-                       If None, no trend in x is added and if "random", create
-                       random gradients in each layer.
-        :param texture_trends: A list of the of array depicting the alignment of
-                               the texture within a layer. If None, will follow
-                               the top boundary of the layer.
+        :param gradxs: A list of the linear trend of each property in each
+                       layer. If None, no trend in x is added and if "random",
+                       create random gradients in each layer.
+        :param texture_trends: A list of the of array depicting the alignment
+                               of the texture within a layer. If None, will
+                               follow the top boundary of the layer.
         :param seed: A seed for random generators.
 
         :return:
@@ -299,7 +299,8 @@ class Stratigraphy(object):
         seqid = 0
         seqid0 = 0
         seqthick = 0
-        sequences = [s for s in self.sequences if s.skipprob < np.random.rand()]
+        sequences = [s for s in self.sequences
+                     if s.skipprob < np.random.rand()]
         seqiter = iter(sequences[0])
 
         sthicks_min = [np.random.randint(s.thick_min, s.thick_max)
@@ -517,7 +518,8 @@ class Layer(object):
 class Deformation:
 
     def __init__(self, max_deform_freq=0, min_deform_freq=0, amp_max=0,
-                 max_deform_nfreq=20, prob_deform_change=0.3, cumulative=False):
+                 max_deform_nfreq=20, prob_deform_change=0.3,
+                 cumulative=False):
         """
         Create random deformations of a boundary with harmonic functions.
 

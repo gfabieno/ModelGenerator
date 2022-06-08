@@ -656,8 +656,8 @@ class Faults:
 
 class Diapir(Lithology):
 
-    def __init__(self, *args, height_min=0, height_max=1, width_min=0,
-                 width_max=1, prob=1, **kwargs):
+    def __init__(self, *args, loc_min=None, loc_max=None, height_min=0,
+                 height_max=1, width_min=0, width_max=1, prob=1, **kwargs):
         """
         Add a diapir-shaped deformation to layer boundaries.
 
@@ -668,6 +668,8 @@ class Diapir(Lithology):
         :param prob: Probability of adding a diapir to a layer.
         """
         super().__init__(*args, **kwargs)
+        self.loc_min = loc_min
+        self.loc_max = loc_max
         self.height_min = height_min
         self.height_max = height_max
         self.width_min = width_min
@@ -686,8 +688,16 @@ class Diapir(Lithology):
             height = np.random.randint(self.height_min, self.height_max)
         else:
             height = self.height_min
-        x_start = np.random.randint(nx-2*width)
-        x_end = x_start + 2*width
+        loc_max = nx - width - 1
+        if self.loc_max is not None:
+            assert self.loc_max <= loc_max
+            loc_max = self.loc_max
+        loc_min = width
+        if self.loc_min is not None:
+            assert self.loc_min >= loc_min
+            loc_min = self.loc_min
+        loc = np.random.randint(loc_min, loc_max+1)
+        x_start, x_end = loc - width, loc + width
 
         k = 10**np.random.uniform(.5, 1.5)
         x = np.linspace(0, 2*np.pi, 2*width+1)

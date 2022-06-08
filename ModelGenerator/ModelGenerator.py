@@ -338,15 +338,24 @@ class Stratigraphy(object):
                 gradx = gradxs[ii]
 
             for jj, prop in enumerate(lith):
-                if prop.dzmax is not None and lith0 is not None:
-                    minval = properties[jj] - prop.dzmax
-                    maxval = properties[jj] + prop.dzmax
+                dzmin, dzmax = prop.dzmin, prop.dzmax
+                if dzmax is not None and dzmin is None:
+                    dzmin = -dzmax
+                if dzmin is not None and lith0 is not None:
+                    minval = properties[jj] + dzmin
                     if minval < prop.min:
                         minval = prop.min
-                    if maxval > prop.max:
-                        maxval = prop.max
+                    elif minval > prop.max:
+                        minval = prop.max
                 else:
                     minval = prop.min
+                if dzmax is not None and lith0 is not None:
+                    maxval = properties[jj] + dzmax
+                    if maxval < prop.min:
+                        maxval = prop.min
+                    elif maxval > prop.max:
+                        maxval = prop.max
+                else:
                     maxval = prop.max
                 if seqid == seqid0 and seq.accept_decrease < np.random.rand():
                     if prop.filter_decrease:
@@ -711,7 +720,7 @@ class Property(object):
 
     def __init__(self, name="Default", vmin=1000, vmax=5000, texture=0,
                  trend_min=0, trend_max=0, gradx_min=0, gradx_max=0,
-                 dzmax=None, filter_decrease=False):
+                 dzmin=None, dzmax=None, filter_decrease=False):
         """
         Describe one material property of a Lithology object.
 
@@ -730,6 +739,8 @@ class Property(object):
         :param gradx_max: Maximum value of the linear trend in x in a layer.
         :param dzmax: Maximum change between two consecutive layers with
                       the same lithology.
+        :param dzmin: Minimum change between two consecutive layers with
+                      the same lithology. Defaults to `-dzmax`.
         :param filter_decrease: If true, accept a decrease of this property
                                 according to the Sequence's accept_decrease.
         """
@@ -741,6 +752,7 @@ class Property(object):
         self.trend_max = trend_max
         self.gradx_min = gradx_min
         self.gradx_max = gradx_max
+        self.dzmin = dzmin
         self.dzmax = dzmax
         self.filter_decrease = filter_decrease
 

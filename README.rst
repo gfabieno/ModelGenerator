@@ -1,4 +1,4 @@
 ModelGenerator
 --------
 
-A package for generation layered model to use for seismic modeling.
+A package for generating layered model for seismic modeling.

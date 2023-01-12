@@ -40,7 +40,7 @@ The contents of this package are the following:
 
 - Various functions and classes that implement specific generation mechanics of a model (`Deformation`, `Faults`, `random_thicks`, `random_dips`, `generate_random_boundaries`, `random_fields`).
 
-Some of the implemented parameters are described in **SIMON Jérome (2023) *3 Écarts de domaine en reconstruction de modèles de vitesse sismique par apprentissage profond: caractérisation de la transférabilité inter-domaines*, Transférabilité et contrôle de qualité en estimation de modèles de vitesse sismique par apprentissage profond, Institut national de la rechercher scientifique**.
+Some of the implemented parameters are described in **SIMON Jérome (2023) *3 Écarts de domaine en reconstruction de modèles de vitesse sismique par apprentissage profond: caractérisation de la transférabilité inter-domaines*, Transférabilité et contrôle de qualité en estimation de modèles de vitesse sismique par apprentissage profond, Institut national de la recherche scientifique**.
 
 
 ## Sample usage

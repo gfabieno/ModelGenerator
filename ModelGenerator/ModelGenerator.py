@@ -1,322 +1,389 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-    Class to generate seismic models and labels for training.
+Generate seismic models and labels for training.
 """
 
-import numpy as np
-from scipy.signal import gaussian
-import h5py as h5
-from prettytable import PrettyTable
-import matplotlib.pyplot as plt
-import matplotlib.animation as animation
 import copy
 
+import numpy as np
+import h5py as h5
+from scipy.signal import gaussian
+from prettytable import PrettyTable
+from matplotlib import pyplot as plt
+from matplotlib import animation
 
-def random_fields(nf, nz, nx, lz=2, lx=2, corr=None):
+
+class ModelGenerator:
     """
-    Created a random model with bandwidth limited noise.
+    Generate a layered model.
 
-    @params:
-    nf (int): Number of fields to generate
-    nz (int): Number of cells in Z
-    nx (int): Number of cells in X
-    lz (int): High frequency cut-off size in z
-    lx (int): High frequency cut-off size in x
-    corr (float): Zero-lag correlation between 1 field and subsequent fields
-    @returns:
-
-    """
-
-    corrs = [1.0] + [corr for _ in range(nf-1)]
-
-    noise0 = np.random.random([nz, nx])
-    noise0 = noise0 - np.mean(noise0)
-    noises = []
-    for ii in range(nf):
-        noisei = np.random.random([nz, nx])
-        noisei = noisei - np.mean(noisei)
-        noise = corrs[ii] * noise0 + (1.0-corrs[ii]) * noisei
-        noise = np.fft.fft2(noise)
-        noise[0, :] = 0
-        noise[:, 0] = 0
-
-        maskz = gaussian(nz, lz)**2
-        maskz = np.roll(maskz, [int(nz / 2), 0])
-        if lx > 0:
-            maskx = gaussian(nx, lx)**2
-            maskx = np.roll(maskx, [int(nx / 2), 0])
-            noise *= maskx
-        noise = noise * np.reshape(maskz, [-1, 1])
-
-        noise = np.real(np.fft.ifft2(noise))
-        noise = noise / np.max(noise)
-        if lx == 0:
-            noise = np.stack([noise[:, 0] for _ in range(nx)], 1)
-
-        noises.append(noise)
-
-    return noises
-
-
-def random_thicks(nz, thickmin, thickmax, nmin, nlayer,
-                  thick0min=None, thick0max=None):
-    """
-    Genereate a random sequence of layers with different thicknesses
-
-    :param nz: Number of points in Z of the grid
-    :param thickmin: Minimum thickness of a layer in grid point
-    :param thickmax: Maximum thickness of a layer in grid point
-    :param nmin: Minimum number of layers
-    :param nlayer: The number of layers to create. If 0, draws a ramdom
-                        number of layers
-    :param thick0min: If provided, the first layer thickness is drawn between
-                      thick0min and thick0max
-    :param thick0max:
-
-    :return: A list containing the thicknesses of the layers
-
+    This class can read and write to a file the parameters needed to generate
+    random models.
     """
 
-    # Determine the minimum and maximum number of layers
-    thickmax = np.min([int(nz / nmin), thickmax])
-    if thickmax < thickmin:
-        print("warning: maximum number of layers smaller than minimum")
-    nlmax = int(nz / thickmin)
-    nlmin = int(nz / thickmax)
-    if nlayer == 0:
-        if nlmin < nlmax:
-            nlayer = np.random.randint(nlmin, nlmax)
-        else:
-            nlayer = nlmin
-    else:
-        nlayer = int(np.clip(nlayer, nlmin, nlmax))
+    def __init__(self):
+        # Number of grid cells in X direction.
+        self.NX = 256
+        # Number of grid cells in Z direction.
+        self.NZ = 256
+        # Grid spacing in X, Y, Z directions (in meters).
+        self.dh = 10.0
 
-    thicks = np.random.uniform(thickmin, thickmax,
-                               size=[nlayer]).astype(np.int)
+        # Minimum thickness of a layer (in grid cells).
+        self.layer_dh_min = 50
+        # Minimum thickness of a layer (in grid cells).
+        self.layer_dh_max = 1e9
+        # Minimum number of layers.
+        self.layer_num_min = 5
+        # Fix the number of layers if not 0.
+        self.num_layers = 0
 
-    if thick0max is not None and thick0min is not None:
-        thicks[0] = np.random.uniform(thick0min, thick0max)
+        # If true, first layer dip is 0.
+        self.dip_0 = True
+        # Maximum dip of a layer.
+        self.dip_max = 0
+        # Maximum dip difference between two adjacent layers.
+        self.ddip_max = 5
 
-    tops = np.cumsum(thicks)
-    thicks = thicks[tops < nz]
+        # Change between two layers.
+        # Add random noise two a layer (% or velocity).
+        self.max_texture = 0
+        # Range of the filter in x for texture creation.
+        self.texture_xrange = 0
+        # Range of the filter in z for texture creation.
+        self.texture_zrange = 0
+        # Zero-lag correlation between parameters, same for each
+        self.corr = 0.6
 
-    return thicks
+        # Minimum fault dip.
+        self.fault_dip_min = 0
+        # Maximum fault dip.
+        self.fault_dip_max = 0
+        # Minimum fault displacement.
+        self.fault_displ_min = 0
+        # Maximum fault displacement.
+        self.fault_displ_max = 0
+        # Bounds of the fault origin location.
+        self.fault_x_lim = [0, self.NX]
+        self.fault_y_lim = [0, self.NZ]
+        # Maximum quantity of faults.
+        self.fault_nmax = 1
+        # Probability of having faults.
+        self.fault_prob = 0
 
+        self.thick0min = None
+        self.thick0max = None
+        self.layers = None
 
-def random_dips(n_dips, dip_max, ddip_max, dip_0=True):
-    """
-    Generate a random sequence of dips of layers
+    def save_parameters_to_disk(self, filename):
+        """
+        Save all parameters to disk.
 
-    :param n_dips: Number of dips to generate
-    :param dip_max: Maximum dip
-    :param ddip_max: Maximum change of dip
-    :param dip_0: If true, the first dip is 0
+        :param filename: Name of the file for saving parameters.
+        """
+        with h5.File(filename, 'w') as file:
+            for item in self.__dict__:
+                file.create_dataset(item, data=self.__dict__[item])
 
-    :return: A list containing the dips of the thicks
-    """
+    def read_parameters_from_disk(self, filename):
+        """
+        Read all parameters from a file.
 
-    dips = np.zeros(n_dips)
-    if not dip_0:
-        dips[1] = np.random.uniform(-dip_max, dip_max)
-    for ii in range(2, n_dips):
-        dips[ii] = dips[ii - 1] + np.random.uniform(-ddip_max, ddip_max)
-        if np.abs(dips[ii]) > dip_max:
-            dips[ii] = np.sign(dips[ii]) * dip_max
+        :param filename: Name of the file containing parameters.
+        """
+        with h5.File(filename, 'r') as file:
+            for item in self.__dict__:
+                try:
+                    self.__dict__[item] = file[item][()]
+                except KeyError:
+                    pass
 
-    return dips
+    def generate_model(self, stratigraphy, thicks=None, dips=None,
+                       boundaries=None, gradxs=None, texture_trends=None,
+                       seed=None):
+        """
+        :param stratigraphy: A `Stratigraphy` object.
+        :param thicks: A list of layer thicknesses. If not provided, create
+                       random thicknesses. See ModelParameters for variables
+                       controlling the random generation process.
+        :param dips: A list of layer dips. If not provided, create
+                     random dips.
+        :param boundaries: A list of arrays containing the position of the top
+                           of the layers. If none, generated randomly
+        :param gradxs: A list of the linear trend of each property in each
+                       layer. If None, no trend in x is added and if "random",
+                       create random gradients in each layer.
+        :param texture_trends: A list of the of array depicting the alignment
+                               of the texture within a layer. If None, will
+                               follow the top boundary of the layer.
+        :param seed: A seed for random generators.
 
+        :return:
+            props2d: A list of 2D property arrays
+            layerids: A 2D array containing layer ids
+            layers: A list of Layer objects
+        """
+        if seed is not None:
+            np.random.seed(seed)
 
-def generate_random_boundaries(nx, layers):
-    """
-    Generate randomly a boundary for each layer, based on the thickness, dip
-    and deformation properties of the sequence to which a layer belong.
-
-    :param nx:
-    :param layers:
-    :return: layers: The list of layers with the boundary property filled
-                     randomly
-    """
-    top = layers[0].thick
-    seq = layers[0].sequence
-    de = np.zeros(nx, dtype=np.int)
-    for layer in layers[1:]:
-        if layer.boundary is None:
-            boundary = top
-            theta = layer.dip / 360 * 2 * np.pi
-            boundary += np.array([int(np.tan(theta) * (jj - nx / 2))
-                                  for jj in range(nx)], dtype=np.int)
-            if layer.sequence != seq:
-                prob = 1
-                seq = layer.sequence
+        if stratigraphy is None:
+            stratigraphy = Stratigraphy()
+        if thicks is None:
+            if boundaries is None:
+                thicks = random_thicks(self.NZ, self.layer_dh_min,
+                                       self.layer_dh_max,
+                                       self.layer_num_min, self.num_layers,
+                                       thick0min=self.thick0min,
+                                       thick0max=self.thick0max)
             else:
-                prob = np.random.rand()
-            if seq.deform is not None and prob < seq.deform.prob_deform_change:
-                if seq.deform.cumulative:
-                    de += seq.deform.create_deformation(nx).astype(np.int)
-                else:
-                    de = seq.deform.create_deformation(nx)
-            boundary += de.astype(np.int)
-            boundary = np.clip(boundary, 0, None)
-            layer.boundary = boundary
-            top += layer.thick
+                thicks = [0 for _ in range(len(boundaries))]
+        if dips is None:
+            dips = random_dips(len(thicks), self.dip_max,
+                               self.ddip_max, dip_0=self.dip_0)
 
-    return layers
-
-
-def gridded_model(nx, nz, layers, lz, lx, corr):
-    """
-    Generate a gridded model from a model depicted by a list of Layers objects.
-    Add a texture in each layer
-
-    :param nx: Grid size in X
-    :param nz: Grid size in Z
-    :param layers: A list of Layer objects
-    :param lz: The coherence length in z of the random heterogeneities
-    :param lx: The coherence length in x of the random heterogeneities
-    :param corr: Zero-lag correlation between each property
-    :return: A list of 2D grid of the properties and a grid of layer id numbers
-    """
-
-    # Generate the 2D model, from top thicks to bottom
-    npar = len(layers[0].properties)
-    props2d = [np.full([nz, nx], p) for p in layers[0].properties]
-    layerids = np.zeros([nz, nx])
-
-    addtext = False
-    addtrend = False
-    for layer in layers:
-        for prop in layer.lithology.properties:
-            if lx > 0 and lz > 0 and prop.texture > 0:
-                addtext = True
-            if np.abs(prop.trend_min) > 1e-6 or np.abs(prop.trend_max) > 1e-6:
-                addtrend = True
-
-    if addtext:
-        textures = random_fields(npar, 2 * nz, 2 * nx, lz=lz, lx=lx, corr=corr)
-        for n in range(npar):
-            textamp = layers[0].lithology.properties[n].texture
-            if textamp > 0:
-                textures[n] = textures[n] / np.max(textures[n])
-                props2d[n] += textures[n][:nz, :nx] * textamp
-
-    for layer in layers[1:]:
-        trends = [None for _ in range(npar)]
-        if addtrend is not None:
-            for n in range(npar):
-                tmin = layer.lithology.properties[n].trend_min
-                tmax = layer.lithology.properties[n].trend_max
-                trends[n] = np.random.uniform(tmin, tmax)
-
-        top = np.max(layer.boundary)
-        if layer.texture_trend is not None:
-            texture_trend = -layer.texture_trend
-            texture_trend -= np.min(texture_trend)
-            if top + int(np.max(texture_trend)) + nz > 2 * nz:
-                top = 2 * nz - int(np.max(texture_trend)) - nz
+        layers = stratigraphy.build_stratigraphy(thicks, dips, gradxs=gradxs)
+        if boundaries is None:
+            layers = generate_random_boundaries(self.NX, layers)
         else:
-            texture_trend = None
+            for ii, layer in enumerate(layers):
+                layer.boundary = boundaries[ii]
+        if texture_trends is not None:
+            for ii, layer in enumerate(layers):
+                layer.texture_trend = texture_trends[ii]
 
-        if isinstance(layer.lithology, Diapir):
-            layer.lithology.add_diapir(layer)
+        props2d, layerids = gridded_model(self.NX, self.NZ, layers,
+                                          self.texture_zrange,
+                                          self.texture_xrange,
+                                          self.corr)
+        faults = Faults(dip_min=self.fault_dip_min, dip_max=self.fault_dip_max,
+                        displ_min=self.fault_displ_min,
+                        displ_max=self.fault_displ_max, dh=self.dh,
+                        x_lim=self.fault_x_lim, y_lim=self.fault_y_lim,
+                        nmax=self.fault_nmax, prob=self.fault_prob)
+        props2d, layerids = faults.add_faults(props2d, layerids)
 
-        for jj, z in enumerate(layer.boundary):
-            for n in range(npar):
-                prop = layer.properties[n]
-                grad = layer.gradx[n]
-                props2d[n][z:, jj] = prop + grad * jj
-            layerids[z:, jj] = layer.idnum
-            if addtext:
-                if layer.texture_trend is not None:
-                    b1 = top + z + int(texture_trend[jj])
+        names = [prop.name for prop in layers[0].lithology]
+        propdict = {name: prop for name, prop in zip(names, props2d)}
+        return propdict, layerids, layers
+
+    def plot_model(self, props2d, layers, animated=False, figsize=(16, 8)):
+        """
+        Plot the properties of a generated gridded model.
+
+        :param props2d: The dictionary of properties from the output of
+                        generate_model.
+        :param layers: A list of layers from the output of generate_model.
+        :param animated: If true, the plot can be animated.
+        :param figsize: A tuple providing the size of the figure to create.
+
+        :return:
+            ims: A list of `pyplot` images.
+            fig: A `Figure` object.
+        """
+        names = list(props2d.keys())
+        minmax = {name: [np.inf, -np.inf] for name in names}
+        for layer in layers:
+            for prop in layer.lithology:
+                if prop.name in minmax:
+                    if minmax[prop.name][0] > prop.min:
+                        minmax[prop.name][0] = prop.min
+                    if minmax[prop.name][1] < prop.max:
+                        minmax[prop.name][1] = prop.max
+        for name in names:
+            if minmax[name][0] is np.inf:
+                minmax[name] = [np.min(props2d[name]) / 10,
+                                np.min(props2d[name]) * 10]
+
+        fig, axs = plt.subplots(1, len(names), figsize=figsize, squeeze=False)
+        axs = axs.flatten()
+        ims = [axs[ii].imshow(props2d[name], animated=animated, aspect='auto',
+                              cmap='inferno', vmin=minmax[name][0],
+                              vmax=minmax[name][1])
+               for ii, name in enumerate(names)]
+
+        for ii, ax in enumerate(axs):
+            ax.set_title(names[ii])
+            plt.colorbar(ims[ii], ax=ax, orientation="horizontal", pad=0.16,
+                         fraction=0.15)
+        plt.tight_layout()
+
+        return fig, ims
+
+    def animated_dataset(self, *args, filename=None, nframes=1000, **kwargs):
+        """
+        Produce an animation of a dataset.
+
+        Show the input data, and the different labels for each example.
+
+        :param phase: Which dataset, from either train, test or validate.
+        """
+        props2d, _, layers = self.generate_model(*args, **kwargs)
+        names = list(props2d.keys())
+        fig, ims = self.plot_model(props2d, layers, animated=True)
+
+        def init():
+            for im, name in zip(ims, names):
+                im.set_array(props2d[name])
+            return ims
+
+        def animate(t):
+            props2d, _, layers = self.generate_model(*args, **kwargs)
+            for im, name in zip(ims, names):
+                im.set_array(props2d[name])
+            return ims
+
+        anim = animation.FuncAnimation(fig, animate, init_func=init,
+                                       frames=nframes, interval=3000,
+                                       blit=True, repeat=True)
+        if filename:
+            Writer = animation.writers['ffmpeg']
+            writer = Writer(fps=1, metadata=dict(artist='ModelGenerator'),
+                            bitrate=1800)
+            anim.save(filename + ".mp4", writer=writer)
+
+        plt.show()
+
+
+class Stratigraphy(object):
+
+    def __init__(self, sequences=None, defaultprops=None):
+        """
+        A series of Sequences.
+
+        When building a model the layered model will contain the sequences in
+        order.
+
+        :param sequences: A list of Sequence objects
+        """
+        if sequences is None:
+            litho = Lithology(properties=defaultprops)
+            sequences = [Sequence(lithologies=[litho])]
+
+        self.sequences = sequences
+        self.layers = None
+
+    def properties(self):
+        """
+        Summarize the properties in Stratigraphy.
+
+        :return: A dict containing all properties contained in Stratigraphy
+                 with minimum and maximum values {p.name: [min, max]}.
+        """
+        props = {p.name: [9999, 0]
+                 for p in self.sequences[0].lithologies[0]}
+        for seq in self.sequences:
+            for lith in seq:
+                for p in lith.properties:
+                    if props[p.name][0] > p.min:
+                        props[p.name][0] = p.min
+                    if props[p.name][1] < p.max:
+                        props[p.name][1] = p.max
+        return props
+
+    def build_stratigraphy(self, thicks, dips, gradxs=None):
+        """
+        Generate a sequence of Layer objects.
+
+        Provide properties of each layer in a stratigraphic column.
+
+        :param thicks: A list of layer thicknesses.
+        :param dips: A list of layer dips.
+        :param gradxs: A list of the linear trend of each property in each
+                       layer. If None, no trend in x is added and if "random",
+                       create random gradients in each layer.
+
+        :return: A list of layer objects.
+        """
+        layers = []
+        seqid = 0
+        seqid0 = 0
+        seqthick = 0
+        sequences = [s for s in self.sequences
+                     if s.skipprob < np.random.rand()]
+        seqiter = iter(sequences[0])
+
+        sthicks_min = [np.random.randint(s.thick_min, s.thick_max)
+                       for s in sequences]
+        sthicks_max = [np.random.randint(smin, s.thick_max)
+                       for s, smin in zip(sequences, sthicks_min)]
+        sthicks_min[-1] = sthicks_max[-1] = 1e09
+
+        seq = sequences[0]
+        lith = None
+        properties = [0.0 for _ in sequences[0].lithologies[0]]
+        seq_nlay = 0
+        for ii, (t, di) in enumerate(zip(thicks, dips)):
+            seqthick0 = seqthick
+            seqthick += t
+            if seq_nlay >= seq.nmin and (seqthick0 > sthicks_min[seqid]
+                                         or seqthick >= sthicks_max[seqid]):
+                seq_nlay = 0
+                if seqid < len(sequences) - 1:
+                    seqid0 = seqid
+                    seqid += 1
+                    seqiter = iter(sequences[seqid])
+                    seq = sequences[seqid]
+            seq_nlay += 1
+            lith0 = lith
+            lith = next(seqiter)
+
+            if gradxs is None:
+                gradx = None
+            elif gradxs == "random":
+                gradx = [0 for _ in lith]
+                for n, prop in enumerate(lith):
+                    gradxs[n] = np.random.rand(prop.gradx_min, prop.gradx_max)
+            else:
+                gradx = gradxs[ii]
+
+            for jj, prop in enumerate(lith):
+                dzmin, dzmax = prop.dzmin, prop.dzmax
+                if dzmax is not None and dzmin is None:
+                    dzmin = -dzmax
+                if dzmin is not None and lith0 is not None:
+                    minval = properties[jj] + dzmin
+                    if minval < prop.min:
+                        minval = prop.min
+                    elif minval > prop.max:
+                        minval = prop.max
                 else:
-                    b1 = top
-                b2 = b1 + nz - z
-                for n in range(npar):
-                    textamp = layer.lithology.properties[n].texture
-                    if textamp > 0:
-                        props2d[n][z:, jj] += textures[n][b1:b2, jj] * textamp
-            if addtrend is not None:
-                for n in range(npar):
-                    props2d[n][z:, jj] += (trends[n] * np.arange(z, nz))
+                    minval = prop.min
+                if dzmax is not None and lith0 is not None:
+                    maxval = properties[jj] + dzmax
+                    if maxval < prop.min:
+                        maxval = prop.min
+                    elif maxval > prop.max:
+                        maxval = prop.max
+                else:
+                    maxval = prop.max
+                if seqid == seqid0 and seq.accept_decrease < np.random.rand():
+                    if prop.filter_decrease:
+                        if prop.min <= properties[jj]:
+                            minval = properties[jj]
+                        if maxval < minval:
+                            maxval = minval
 
-    # for n in range(npar):
-    #     vmin = layers[0].lithology.properties[n].min
-    #     vmax = layers[0].lithology.properties[n].max
-    #     props2d[n][props2d[n] < vmin] = vmin
-    #     props2d[n][props2d[n] > vmax] = vmax
+                properties[jj] = np.random.uniform(minval, maxval)
 
-    return props2d, layerids
+            layers.append(Layer(ii, t, di, seq, lith, gradx=gradx,
+                                properties=copy.copy(properties)))
 
+        self.layers = layers
 
-class Property(object):
+        return layers
 
-    def __init__(self, name="Default", vmin=1000, vmax=5000, texture=0,
-                 trend_min=0, trend_max=0, gradx_min=0, gradx_max=0,
-                 dzmax=None, filter_decrease=False):
-        """
-        A Property is used to describe one material property of a Lithology
-        object, and provides the maximum and minimum value that can take
-        the property within a Lithology.
-        For example, a Property could describe the P-wave velocity.
-
-        :param name: Name of the property
-        :param vmin: Minimum value of the property
-        :param vmax: Maximum value of the property
-        :param texture: Maximum percentage of change of random fluctuations
-                            within a layer of the property
-        :param trend_min: Minimum value of the linear trend in z within a layer
-        :param trend_max: Maximum value of the linear trend in z within a layer
-        :param gradx_min: Minimum value of the linear trend in x within a layer
-        :param gradx_max: Maximum value of the linear trend in x within a layer
-        :param dzmax: Maximum change between two consecutive layers with
-                      the same lithology
-        :param filter_decrease: If true, accept a decrease of this property
-                                according to the Sequence accept_decrease value
-        """
-
-        self.name = name
-        self.min = vmin
-        self.max = vmax
-        self.texture = texture
-        self.trend_min = trend_min
-        self.trend_max = trend_max
-        self.gradx_min = gradx_min
-        self.gradx_max = gradx_max
-        self.dzmax = dzmax
-        self.filter_decrease = filter_decrease
-
-
-class Lithology(object):
-
-    def __init__(self, name="Default", properties=None):
-        """
-        A Lithology is a collection of Property objects.
-        For example, a Lithology could be made up of vp and rho for an acoustic
-        media and describe unconsolidated sediments seismic properties for a
-        marine survey.
-
-        :param name: Name of a lithology
-        :param properties: A list of Property objects
-        """
-
-        self.name = name
-        if properties is None:
-            properties = [Property()]
-        self.properties = properties
-        for prop in properties:
-            setattr(self, prop.name, prop)
-
-    def __iter__(self):
-        self.n = 0
-        return self
-
-    def __next__(self):
-        if self.n < len(self.properties):
-            self.n += 1
-            return self.properties[self.n-1]
-        else:
-            raise StopIteration
+    def summary(self):
+        x = PrettyTable()
+        x.add_column("Layer no", [la.idnum for la in self.layers])
+        x.add_column("Sequence",  [la.sequence.name for la in self.layers])
+        x.add_column("Lithology",  [la.lithology.name for la in self.layers])
+        x.add_column("Thickness",  [la.thick for la in self.layers])
+        x.add_column("Dip",  [la.dip for la in self.layers])
+        for ii in range(len(self.layers[0].lithology.properties)):
+            x.add_column(self.layers[0].lithology.properties[ii].name,
+                         [la.properties[ii] for la in self.layers])
+        print(x)
 
 
 class Sequence(object):
@@ -325,33 +392,33 @@ class Sequence(object):
                  proportions=None, thick_min=0, thick_max=1e9, nmax=9999,
                  nmin=1, deform=None, skip_prob=0, accept_decrease=1):
         """
-        A Sequence object gives a sequence of Lithology objects. It can be
-        ordered or random, meaning that when iterated upon, the Sequence object
-        will provided either the given lithologies in order, or provide a
-        random draw of the lithologies, with a probability of a lithology to
-        be drawn given by proportions.
+        A sequence of Lithology objects.
 
-        :param name: Name of the sequence
-        :param lithologies: A list of Lithology objects
+        It can be ordered or random, meaning that when iterated upon, the
+        Sequence object will provide either the given lithologies in order, or
+        provide a random draw of the lithologies, with a probability of a
+        lithology to be drawn given by proportions.
+
+        :param name: Name of the sequence.
+        :param lithologies: A list of Lithology objects.
         :param ordered: If True, the Sequence provides the lithology in the
                         order within lithologies. If False, the Sequence
-                        provides random lithologies drawn from the list
+                        provides random lithologies drawn from the list.
         :param proportions: A list of proportions of each lithology in the
-                            sequence. Must sum to 1
-        :param thick_min: The minimum thickness of the sequence
-        :param thick_max: The maximum thickness of the sequence
+                            sequence. Must sum to 1.
+        :param thick_min: The minimum thickness of the sequence.
+        :param thick_max: The maximum thickness of the sequence.
         :param nmax: Maximum number of lithologies that can be drawn from a
                      sequence, when ordered is False.
         :param nmin: Minimum number of lithologies that can be drawn from a
                      sequence, when ordered is False.
         :param deform: A Deformation object that generate random deformation of
-                       a boundary
-        :param skip_prob: The probability that this sequence is skipped
+                       a boundary.
+        :param skip_prob: The probability that this sequence is skipped.
         :param accept_decrease: The probability to accept a decrease of a
-                               property, for properties with
-                               filter_decrease=True
+                                property, for properties with
+                                filter_decrease=True.
         """
-
         self.name = name
         if lithologies is None:
             lithologies = [Lithology()]
@@ -390,25 +457,57 @@ class Sequence(object):
             raise StopIteration
 
 
+class Lithology(object):
+
+    def __init__(self, name="Default", properties=None):
+        """
+        A collection of Property objects.
+
+        For example, a Lithology could be made up of vp and rho for an acoustic
+        media and describe unconsolidated sediments seismic properties for a
+        marine survey.
+
+        :param name: Name of a lithology
+        :param properties: A list of Property objects
+        """
+        self.name = name
+        if properties is None:
+            properties = [Property()]
+        self.properties = properties
+        for prop in properties:
+            setattr(self, prop.name, prop)
+
+    def __iter__(self):
+        self.n = 0
+        return self
+
+    def __next__(self):
+        if self.n < len(self.properties):
+            self.n += 1
+            return self.properties[self.n-1]
+        else:
+            raise StopIteration
+
+
 class Layer(object):
 
     def __init__(self, idnum, thick, dip, sequence, lithology, properties,
                  boundary=None, gradx=None, texture_trend=None):
         """
-        A Layer object describes a specific layer within a model, providing a
-        description of its lithology, its thickness, dip and the deformation of
-        its upper boundary.
+        A specific layer within a model.
 
-        :param idnum: The identification number of the layer
-        :param thick: The thickness of the layer
-        :param dip: The dip of the layer
-        :param sequence: A Sequence object to which the layer belongs
-        :param lithology: A Lithology object to which the layer belongs
-        :param properties: A list of value of the layer properties
-        :param boundary: An array of the position of the top of the layer
-        :param gradx: A list of horizontal increase of each property
+        Provide a description of its lithology, its thickness, dip and the
+        deformation of its upper boundary.
+
+        :param idnum: The identification number of the layer.
+        :param thick: The thickness of the layer.
+        :param dip: The dip of the layer.
+        :param sequence: A Sequence object to which the layer belongs.
+        :param lithology: A Lithology object to which the layer belongs.
+        :param properties: A list of value of the layer properties.
+        :param boundary: An array of the position of the top of the layer.
+        :param gradx: A list of horizontal increase of each property.
         """
-
         self.idnum = idnum
         self.thick = int(thick)
         self.dip = dip
@@ -425,148 +524,20 @@ class Layer(object):
         self.texture_trend = texture_trend
 
 
-class Stratigraphy(object):
-
-    def __init__(self, sequences=None, defaultprops=None):
-        """
-        A Stratigraphy is made up of a series of Sequences. When building
-        a model the layered model will contain the sequences in order.
-
-        :param sequences: A list of Sequence objects
-        """
-        if sequences is None:
-            litho = Lithology(properties=defaultprops)
-            sequences = [Sequence(lithologies=[litho])]
-
-        self.sequences = sequences
-        self.layers = None
-
-    def properties(self):
-        """
-        Summarize the properties in Stratigraphy
-
-        :return:
-            props: A dict containing all properties contained in Stratigraphy
-                   with minimum and maximum values {p.name: [min, max]}.
-        """
-        props = {p.name: [9999, 0]
-                 for p in self.sequences[0].lithologies[0]}
-        for seq in self.sequences:
-            for lith in seq:
-                for p in lith.properties:
-                    if props[p.name][0] > p.min:
-                        props[p.name][0] = p.min
-                    if props[p.name][1] < p.max:
-                        props[p.name][1] = p.max
-        return props
-
-    def build_stratigraphy(self, thicks, dips, gradxs=None):
-        """
-        Generate a sequence of Layer object that provides properties of each
-        layer in a stratigraphic column.
-
-        :param thicks: A list of layer thicknesses
-        :param dips: A list of layer dips
-        :param gradxs: A list of the linear trend of each property in each layer
-                       If None, no trend in x is added and if "random", create
-                       random gradients in each layer.
-        :return:
-        """
-
-        layers = []
-        seqid = 0
-        seqid0 = 0
-        seqthick = 0
-        sequences = [s for s in self.sequences if s.skipprob < np.random.rand()]
-        seqiter = iter(sequences[0])
-
-        sthicks_min = [np.random.randint(s.thick_min, s.thick_max)
-                       for s in sequences]
-        sthicks_max = [np.random.randint(smin, s.thick_max)
-                       for s, smin in zip(sequences, sthicks_min)]
-        sthicks_min[-1] = sthicks_max[-1] = 1e09
-
-        seq = sequences[0]
-        lith = None
-        properties = [0.0 for _ in sequences[0].lithologies[0]]
-        seq_nlay = 0
-        for ii, (t, di) in enumerate(zip(thicks, dips)):
-            seqthick0 = seqthick
-            seqthick += t
-            if seq_nlay >= seq.nmin and (seqthick0 > sthicks_min[seqid]
-                                         or seqthick >= sthicks_max[seqid]):
-                seq_nlay = 0
-                if seqid < len(sequences) - 1:
-                    seqid0 = seqid
-                    seqid += 1
-                    seqiter = iter(sequences[seqid])
-                    seq = sequences[seqid]
-            seq_nlay += 1
-            lith0 = lith
-            lith = next(seqiter)
-
-            if gradxs is None:
-                gradx = None
-            elif gradxs == "random":
-                gradx = [0 for _ in lith]
-                for n, prop in enumerate(lith):
-                    gradxs[n] = np.random.rand(prop.gradx_min, prop.gradx_max)
-            else:
-                gradx = gradxs[ii]
-
-            for jj, prop in enumerate(lith):
-                if prop.dzmax is not None and lith0 is not None:
-                    minval = properties[jj] - prop.dzmax
-                    maxval = properties[jj] + prop.dzmax
-                    if minval < prop.min:
-                        minval = prop.min
-                    if maxval > prop.max:
-                        maxval = prop.max
-                else:
-                    minval = prop.min
-                    maxval = prop.max
-                if seqid == seqid0 and seq.accept_decrease < np.random.rand():
-                    if prop.filter_decrease:
-                        if prop.min <= properties[jj]:
-                            minval = properties[jj]
-                        if maxval < minval:
-                            maxval = minval
-
-                properties[jj] = np.random.uniform(minval, maxval)
-
-            layers.append(Layer(ii, t, di, seq, lith, gradx=gradx,
-                                properties=copy.copy(properties)))
-
-        self.layers = layers
-
-        return layers
-
-    def summary(self):
-        x = PrettyTable()
-        x.add_column("Layer no", [la.idnum for la in self.layers])
-        x.add_column("Sequence",  [la.sequence.name for la in self.layers])
-        x.add_column("Lithology",  [la.lithology.name for la in self.layers])
-        x.add_column("Thickness",  [la.thick for la in self.layers])
-        x.add_column("Dip",  [la.dip for la in self.layers])
-        for ii in range(len(self.layers[0].lithology.properties)):
-            x.add_column(self.layers[0].lithology.properties[ii].name,
-                         [la.properties[ii] for la in self.layers])
-        print(x)
-
-
 class Deformation:
 
     def __init__(self, max_deform_freq=0, min_deform_freq=0, amp_max=0,
-                 max_deform_nfreq=20, prob_deform_change=0.3, cumulative=False):
+                 max_deform_nfreq=20, prob_deform_change=0.3,
+                 cumulative=False):
         """
-        Create random deformations of a boundary with random harmonic functions
+        Create random deformations of a boundary with harmonic functions.
 
-        :param max_deform_freq: Maximum frequency of the harmonic components
-        :param min_deform_freq: Minimum frequency of the harmonic components
-        :param amp_max: Maximum amplitude of the deformation
-        :param max_deform_nfreq: Number of frequencies
-        :param cumulative:      Bool, if True, deformation of consecutive layers
-                                are added together (are correlated).
+        :param max_deform_freq: Maximum frequency of the harmonic components.
+        :param min_deform_freq: Minimum frequency of the harmonic components.
+        :param amp_max: Maximum amplitude of the deformation.
+        :param max_deform_nfreq: Number of frequencies.
+        :param cumulative: If True, deformation of consecutive layers
+                           are added together (are correlated).
         """
         self.max_deform_freq = max_deform_freq
         self.min_deform_freq = min_deform_freq
@@ -577,11 +548,11 @@ class Deformation:
 
     def create_deformation(self, nx):
         """
-        Create random deformations of a boundary with random harmonic functions
-        :param nx: Number of points of the boundary
+        Create random deformations of a boundary with harmonic functions.
 
-        :return:
-        An array containing the deformation function
+        :param nx: Number of points of the boundary.
+
+        :return: An array containing the deformation function.
         """
         x = np.arange(0, nx)
         deform = np.zeros(nx)
@@ -600,49 +571,6 @@ class Deformation:
                 deform = deform / ddeform * self.amp_max * np.random.rand()
 
         return deform
-
-
-class Diapir(Lithology):
-
-    def __init__(self, *args, height_min=0, height_max=1, width_min=0,
-                 width_max=1, prob=1, **kwargs):
-        """
-        Add a diapir-shaped deformation to layer boundaries.
-
-        :param height_min: Minimum height, in grid cell units.
-        :param height_max: Maximum height, in grid cell units.
-        :param width_min: Minimum width at half-maximum, in grid cell units.
-        :param width_max: Maximum width at half-maximum, in grid cell units.
-        :param prob: Probability of adding a diapir to a layer.
-        """
-        super().__init__(*args, **kwargs)
-        self.height_min = height_min
-        self.height_max = height_max
-        self.width_min = width_min
-        self.width_max = width_max
-        self.prob = prob
-
-    def add_diapir(self, layer):
-        if np.random.random_sample() > self.prob:
-            return
-        nx = len(layer.boundary)
-        if self.width_min != self.width_max:
-            width = np.random.randint(self.width_min, self.width_max)
-        else:
-            width = self.width_min
-        if self.height_min != self.height_max:
-            height = np.random.randint(self.height_min, self.height_max)
-        else:
-            height = self.height_min
-        x_start = np.random.randint(nx-2*width)
-        x_end = x_start + 2*width
-
-        k = 10**np.random.uniform(.5, 1.5)
-        x = np.linspace(0, 2*np.pi, 2*width+1)
-        diapir = (1-np.arctan(k*np.cos(x))/np.arctan(k)) / 2
-        diapir *= height
-        layer.boundary[x_start:x_end+1] -= diapir.astype(int)
-        layer.boundary = np.clip(layer.boundary, 0, None)
 
 
 class Faults:
@@ -735,245 +663,328 @@ class Faults:
         return props2d, layerids
 
 
-class ModelGenerator:
-    """
-    Generate a layered model with the generate_model method.
-    This class can read and write to a file the parameters needed to generate
-    random models
-    """
+class Diapir(Lithology):
 
-    def __init__(self):
-
-        # Number of grid cells in X direction.
-        self.NX = 256
-        # Number of grid cells in Z direction.
-        self.NZ = 256
-        # Grid spacing in X, Y, Z directions (in meters).
-        self.dh = 10.0
-
-        # Minimum thickness of a layer (in grid cells).
-        self.layer_dh_min = 50
-        # Minimum thickness of a layer (in grid cells).
-        self.layer_dh_max = 1e9
-        # Minimum number of layers.
-        self.layer_num_min = 5
-        # Fix the number of layers if not 0.
-        self.num_layers = 0
-
-        # If true, first layer dip is 0.
-        self.dip_0 = True
-        # Maximum dip of a layer.
-        self.dip_max = 0
-        # Maximum dip difference between two adjacent layers.
-        self.ddip_max = 5
-
-        # Change between two layers.
-        # Add random noise two a layer (% or velocity).
-        self.max_texture = 0
-        # Range of the filter in x for texture creation.
-        self.texture_xrange = 0
-        # Range of the filter in z for texture creation.
-        self.texture_zrange = 0
-        # Zero-lag correlation between parameters, same for each
-        self.corr = 0.6
-
-        # Minimum fault dip.
-        self.fault_dip_min = 0
-        # Maximum fault dip.
-        self.fault_dip_max = 0
-        # Minimum fault displacement.
-        self.fault_displ_min = 0
-        # Maximum fault displacement.
-        self.fault_displ_max = 0
-        # Bounds of the fault origin location.
-        self.fault_x_lim = [0, self.NX]
-        self.fault_y_lim = [0, self.NZ]
-        # Maximum quantity of faults.
-        self.fault_nmax = 1
-        # Probability of having faults.
-        self.fault_prob = 0
-
-        self.thick0min = None
-        self.thick0max = None
-        self.layers = None
-
-    def save_parameters_to_disk(self, filename):
+    def __init__(self, *args, loc_min=None, loc_max=None, height_min=0,
+                 height_max=1, width_min=0, width_max=1, prob=1, **kwargs):
         """
-        Save all parameters to disk
+        Add a diapir-shaped deformation to layer boundaries.
 
-        @params:
-        filename (str) :  name of the file for saving parameters
-
-        @returns:
-
+        :param height_min: Minimum height, in grid cell units.
+        :param height_max: Maximum height, in grid cell units.
+        :param width_min: Minimum width at half-maximum, in grid cell units.
+        :param width_max: Maximum width at half-maximum, in grid cell units.
+        :param prob: Probability of adding a diapir to a layer.
         """
-        with h5.File(filename, 'w') as file:
-            for item in self.__dict__:
-                file.create_dataset(item, data=self.__dict__[item])
+        super().__init__(*args, **kwargs)
+        self.loc_min = loc_min
+        self.loc_max = loc_max
+        self.height_min = height_min
+        self.height_max = height_max
+        self.width_min = width_min
+        self.width_max = width_max
+        self.prob = prob
 
-    def read_parameters_from_disk(self, filename):
-        """
-        Read all parameters from a file
-
-        @params:
-        filename (str) :  name of the file containing parameters
-
-        @returns:
-
-        """
-        with h5.File(filename, 'r') as file:
-            for item in self.__dict__:
-                try:
-                    self.__dict__[item] = file[item][()]
-                except KeyError:
-                    pass
-
-    def generate_model(self, stratigraphy, thicks=None, dips=None,
-                       boundaries=None, gradxs=None, texture_trends=None,
-                       seed=None):
-        """
-
-        :param stratigraphy: A stratigraphy object
-        :param thicks: A list of layer thicknesses. If not provided, create
-                       random thicknesses. See ModelParameters for variables
-                       controlling the random generation process.
-        :param dips: A list of layer dips. If not provided, create
-                       random dips.
-        :param boundaries: A list of arrays containing the position of the top
-                           of the layers. If none, generated randomly
-        :param gradxs: A list of the linear trend of each property in each layer
-                       If None, no trend in x is added and if "random", create
-                       random gradients in each layer.
-        :param texture_trends: A list of the of array depicting the alignment of
-                              the texture within a layer. If None, will follow
-                              the top boundary of the layer.
-        :param seed: A seed for random generators
-
-        :return:
-                props2d: A list of 2D property arrays
-                layerids: A 2D array containing layer ids
-                layers: A list of Layer objects
-        """
-
-        if seed is not None:
-            np.random.seed(seed)
-
-        if stratigraphy is None:
-            stratigraphy = Stratigraphy()
-        if thicks is None:
-            if boundaries is None:
-                thicks = random_thicks(self.NZ, self.layer_dh_min,
-                                       self.layer_dh_max,
-                                       self.layer_num_min, self.num_layers,
-                                       thick0min=self.thick0min,
-                                       thick0max=self.thick0max)
-            else:
-                thicks = [0 for _ in range(len(boundaries))]
-        if dips is None:
-            dips = random_dips(len(thicks), self.dip_max,
-                               self.ddip_max, dip_0=self.dip_0)
-
-        layers = stratigraphy.build_stratigraphy(thicks, dips, gradxs=gradxs)
-        if boundaries is None:
-            layers = generate_random_boundaries(self.NX, layers)
+    def add_diapir(self, layer):
+        if np.random.random_sample() > self.prob:
+            return
+        nx = len(layer.boundary)
+        if self.width_min != self.width_max:
+            width = np.random.randint(self.width_min, self.width_max)
         else:
-            for ii, layer in enumerate(layers):
-                layer.boundary = boundaries[ii]
-        if texture_trends is not None:
-            for ii, layer in enumerate(layers):
-                layer.texture_trend = texture_trends[ii]
+            width = self.width_min
+        if self.height_min != self.height_max:
+            height = np.random.randint(self.height_min, self.height_max)
+        else:
+            height = self.height_min
+        loc_max = nx - width - 1
+        if self.loc_max is not None:
+            assert self.loc_max <= loc_max
+            loc_max = self.loc_max
+        loc_min = width
+        if self.loc_min is not None:
+            assert self.loc_min >= loc_min
+            loc_min = self.loc_min
+        loc = np.random.randint(loc_min, loc_max+1)
+        x_start, x_end = loc - width, loc + width
 
-        props2d, layerids = gridded_model(self.NX, self.NZ, layers,
-                                          self.texture_zrange,
-                                          self.texture_xrange,
-                                          self.corr)
-        faults = Faults(dip_min=self.fault_dip_min, dip_max=self.fault_dip_max,
-                        displ_min=self.fault_displ_min,
-                        displ_max=self.fault_displ_max, dh=self.dh,
-                        x_lim=self.fault_x_lim, y_lim=self.fault_y_lim,
-                        nmax=self.fault_nmax, prob=self.fault_prob)
-        props2d, layerids = faults.add_faults(props2d, layerids)
+        k = 10**np.random.uniform(.5, 1.5)
+        x = np.linspace(0, 2*np.pi, 2*width+1)
+        diapir = (1-np.arctan(k*np.cos(x))/np.arctan(k)) / 2
+        diapir *= height
+        layer.boundary[x_start:x_end+1] -= diapir.astype(int)
+        layer.boundary = np.clip(layer.boundary, 0, None)
 
-        names = [prop.name for prop in layers[0].lithology]
-        propdict = {name: prop for name, prop in zip(names, props2d)}
-        return propdict, layerids, layers
 
-    def plot_model(self, props2d, layers, animated=False, figsize=(16, 8)):
+class Property(object):
+
+    def __init__(self, name="Default", vmin=1000, vmax=5000, texture=0,
+                 trend_min=0, trend_max=0, gradx_min=0, gradx_max=0,
+                 dzmin=None, dzmax=None, filter_decrease=False):
         """
-        Plot the properties of a generated gridded model
+        Describe one material property of a Lithology object.
 
-        :param props2d: The dictionary of properties from the output of
-                        generate_model
-        :param layers:  A list of layers from the output of  generate_model
-        :param animated: It true, the plot can be animated
-        :param figsize: A tuple providing the size of the figure to create
+        Provides the maximum and minimum value that the property can take
+        within a Lithology. For example, a Property could describe the
+        P-wave velocity.
 
-        :return: ims: a list of pyplot images
-                 fig: A Figure object
+        :param name: Name of the property.
+        :param vmin: Minimum value of the property.
+        :param vmax: Maximum value of the property.
+        :param texture: Maximum percentage of change of random fluctuations
+                        within a layer of the property.
+        :param trend_min: Minimum value of the linear trend in z in a layer.
+        :param trend_max: Maximum value of the linear trend in z in a layer.
+        :param gradx_min: Minimum value of the linear trend in x in a layer.
+        :param gradx_max: Maximum value of the linear trend in x in a layer.
+        :param dzmax: Maximum change between two consecutive layers with
+                      the same lithology.
+        :param dzmin: Minimum change between two consecutive layers with
+                      the same lithology. Defaults to `-dzmax`.
+        :param filter_decrease: If true, accept a decrease of this property
+                                according to the Sequence's accept_decrease.
         """
-        names = list(props2d.keys())
-        minmax = {name: [np.inf, -np.inf] for name in names}
-        for layer in layers:
-            for prop in layer.lithology:
-                if prop.name in minmax:
-                    if minmax[prop.name][0] > prop.min:
-                        minmax[prop.name][0] = prop.min
-                    if minmax[prop.name][1] < prop.max:
-                        minmax[prop.name][1] = prop.max
-        for name in names:
-            if minmax[name][0] is np.inf:
-                minmax[name] = [np.min(props2d[name]) / 10,
-                                np.min(props2d[name]) * 10]
+        self.name = name
+        self.min = vmin
+        self.max = vmax
+        self.texture = texture
+        self.trend_min = trend_min
+        self.trend_max = trend_max
+        self.gradx_min = gradx_min
+        self.gradx_max = gradx_max
+        self.dzmin = dzmin
+        self.dzmax = dzmax
+        self.filter_decrease = filter_decrease
 
-        fig, axs = plt.subplots(1, len(names), figsize=figsize, squeeze=False)
-        axs = axs.flatten()
-        ims = [axs[ii].imshow(props2d[name], animated=animated, aspect='auto',
-                              cmap='inferno', vmin=minmax[name][0],
-                              vmax=minmax[name][1])
-               for ii, name in enumerate(names)]
 
-        for ii, ax in enumerate(axs):
-            ax.set_title(names[ii])
-            plt.colorbar(ims[ii], ax=ax, orientation="horizontal", pad=0.16,
-                         fraction=0.15)
-        plt.tight_layout()
+def random_thicks(nz, thickmin, thickmax, nmin, nlayer,
+                  thick0min=None, thick0max=None):
+    """
+    Generate a random sequence of layers with different thicknesses.
 
-        return fig, ims
+    :param nz: Number of points in Z of the grid.
+    :param thickmin: Minimum thickness of a layer in grid point.
+    :param thickmax: Maximum thickness of a layer in grid point.
+    :param nmin: Minimum number of layers.
+    :param nlayer: The number of layers to create. If 0, draws a ramdom
+                   number of layers.
+    :param thick0min: If provided, the first layer thickness is drawn between
+                      thick0min and thick0max.
+    :param thick0max: See `thick0min`.
 
-    def animated_dataset(self, *args, filename=None, nframes=1000, **kwargs):
-        """
-        Produces an animation of a dataset, showing the input data, and the
-        different labels for each example.
+    :return: A list containing the thicknesses of the layers.
+    """
+    thickmax = np.min([int(nz / nmin), thickmax])
+    if thickmax < thickmin:
+        print("warning: maximum number of layers smaller than minimum")
+    nlmax = int(nz / thickmin)
+    nlmin = int(nz / thickmax)
+    if nlayer == 0:
+        if nlmin < nlmax:
+            nlayer = np.random.randint(nlmin, nlmax)
+        else:
+            nlayer = nlmin
+    else:
+        nlayer = int(np.clip(nlayer, nlmin, nlmax))
 
-        @params:
-        phase (str): Which dataset: either train, test or validate
-        """
+    thicks = np.random.uniform(thickmin, thickmax,
+                               size=[nlayer]).astype(np.int)
 
-        props2d, _, layers = self.generate_model(*args, **kwargs)
-        names = list(props2d.keys())
-        fig, ims = self.plot_model(props2d, layers, animated=True)
+    if thick0max is not None and thick0min is not None:
+        thicks[0] = np.random.uniform(thick0min, thick0max)
 
-        def init():
-            for im, name in zip(ims, names):
-                im.set_array(props2d[name])
-            return ims
+    tops = np.cumsum(thicks)
+    thicks = thicks[tops < nz]
 
-        def animate(t):
-            props2d, _, layers = self.generate_model(*args, **kwargs)
-            for im, name in zip(ims, names):
-                im.set_array(props2d[name])
-            return ims
+    return thicks
 
-        anim = animation.FuncAnimation(fig, animate, init_func=init,
-                                       frames=nframes, interval=3000, blit=True,
-                                       repeat=True)
-        if filename:
-            Writer = animation.writers['ffmpeg']
-            writer = Writer(fps=1, metadata=dict(artist='ModelGenerator'),
-                            bitrate=1800)
-            anim.save(filename + ".mp4", writer=writer)
 
-        plt.show()
+def random_dips(n_dips, dip_max, ddip_max, dip_0=True):
+    """
+    Generate a random sequence of dips of layers.
+
+    :param n_dips: Number of dips to generate.
+    :param dip_max: Maximum dip.
+    :param ddip_max: Maximum change of dip.
+    :param dip_0: If true, the first dip is 0.
+
+    :return: A list containing the dips of the layers.
+    """
+    dips = np.zeros(n_dips)
+    if not dip_0:
+        dips[1] = np.random.uniform(-dip_max, dip_max)
+    for ii in range(2, n_dips):
+        dips[ii] = dips[ii - 1] + np.random.uniform(-ddip_max, ddip_max)
+        if np.abs(dips[ii]) > dip_max:
+            dips[ii] = np.sign(dips[ii]) * dip_max
+
+    return dips
+
+
+def generate_random_boundaries(nx, layers):
+    """
+    Randomly generate a boundary for each layer.
+
+    Generation is based on the thickness, dip and deformation properties of the
+    sequence to which a layer belong.
+
+    :return: The list of layers with the boundary property filled randomly.
+    """
+    top = layers[0].thick
+    seq = layers[0].sequence
+    de = np.zeros(nx, dtype=np.int)
+    for layer in layers[1:]:
+        if layer.boundary is None:
+            boundary = top
+            theta = layer.dip / 360 * 2 * np.pi
+            boundary += np.array([int(np.tan(theta) * (jj - nx / 2))
+                                  for jj in range(nx)], dtype=np.int)
+            if layer.sequence != seq:
+                prob = 1
+                seq = layer.sequence
+            else:
+                prob = np.random.rand()
+            if seq.deform is not None and prob < seq.deform.prob_deform_change:
+                if seq.deform.cumulative:
+                    de += seq.deform.create_deformation(nx).astype(np.int)
+                else:
+                    de = seq.deform.create_deformation(nx)
+            boundary += de.astype(np.int)
+            boundary = np.clip(boundary, 0, None)
+            layer.boundary = boundary
+            top += layer.thick
+
+    return layers
+
+
+def gridded_model(nx, nz, layers, lz, lx, corr):
+    """
+    Generate a gridded model from a model depicted by a list of Layers objects.
+
+    Add a texture in each layer.
+
+    :param nx: Grid size in X.
+    :param nz: Grid size in Z.
+    :param layers: A list of Layer objects.
+    :param lz: The coherence length in z of the random heterogeneities.
+    :param lx: The coherence length in x of the random heterogeneities.
+    :param corr: Zero-lag correlation between each property.
+
+    :return:
+        props2d: A list of 2D grid of the properties.
+        layerids: A grid of layer id numbers.
+    """
+    # Generate the 2D model, from top thicks to bottom
+    npar = len(layers[0].properties)
+    props2d = [np.full([nz, nx], p) for p in layers[0].properties]
+    layerids = np.zeros([nz, nx])
+
+    addtext = False
+    addtrend = False
+    for layer in layers:
+        for prop in layer.lithology.properties:
+            if lx > 0 and lz > 0 and prop.texture > 0:
+                addtext = True
+            if np.abs(prop.trend_min) > 1e-6 or np.abs(prop.trend_max) > 1e-6:
+                addtrend = True
+
+    if addtext:
+        textures = random_fields(npar, 2 * nz, 2 * nx, lz=lz, lx=lx, corr=corr)
+        for n in range(npar):
+            textamp = layers[0].lithology.properties[n].texture
+            if textamp > 0:
+                textures[n] = textures[n] / np.max(textures[n])
+                props2d[n] += textures[n][:nz, :nx] * textamp
+
+    for layer in layers[1:]:
+        trends = [None for _ in range(npar)]
+        if addtrend is not None:
+            for n in range(npar):
+                tmin = layer.lithology.properties[n].trend_min
+                tmax = layer.lithology.properties[n].trend_max
+                trends[n] = np.random.uniform(tmin, tmax)
+
+        top = np.max(layer.boundary)
+        if layer.texture_trend is not None:
+            texture_trend = -layer.texture_trend
+            texture_trend -= np.min(texture_trend)
+            if top + int(np.max(texture_trend)) + nz > 2 * nz:
+                top = 2 * nz - int(np.max(texture_trend)) - nz
+        else:
+            texture_trend = None
+
+        if isinstance(layer.lithology, Diapir):
+            layer.lithology.add_diapir(layer)
+
+        for jj, z in enumerate(layer.boundary):
+            for n in range(npar):
+                prop = layer.properties[n]
+                grad = layer.gradx[n]
+                props2d[n][z:, jj] = prop + grad * jj
+            layerids[z:, jj] = layer.idnum
+            if addtext:
+                if layer.texture_trend is not None:
+                    b1 = top + z + int(texture_trend[jj])
+                else:
+                    b1 = top
+                b2 = b1 + nz - z
+                for n in range(npar):
+                    textamp = layer.lithology.properties[n].texture
+                    if textamp > 0:
+                        props2d[n][z:, jj] += textures[n][b1:b2, jj] * textamp
+            if addtrend is not None:
+                for n in range(npar):
+                    props2d[n][z:, jj] += (trends[n] * np.arange(z, nz))
+
+    # for n in range(npar):
+    #     vmin = layers[0].lithology.properties[n].min
+    #     vmax = layers[0].lithology.properties[n].max
+    #     props2d[n][props2d[n] < vmin] = vmin
+    #     props2d[n][props2d[n] > vmax] = vmax
+
+    return props2d, layerids
+
+
+def random_fields(nf, nz, nx, lz=2, lx=2, corr=None):
+    """
+    Create a random model with bandwidth limited noise.
+
+    :param nf: Number of fields to generate.
+    :param nz: Number of cells in z.
+    :param nx: Number of cells in x.
+    :param lz: High frequency cut-off size in z.
+    :param lx: High frequency cut-off size in x.
+    :param corr: Zero-lag correlation between 1 field and subsequent fields.
+    """
+    corrs = [1.0] + [corr for _ in range(nf-1)]
+
+    noise0 = np.random.random([nz, nx])
+    noise0 = noise0 - np.mean(noise0)
+    noises = []
+    for ii in range(nf):
+        noisei = np.random.random([nz, nx])
+        noisei = noisei - np.mean(noisei)
+        noise = corrs[ii] * noise0 + (1.0-corrs[ii]) * noisei
+        noise = np.fft.fft2(noise)
+        noise[0, :] = 0
+        noise[:, 0] = 0
+
+        maskz = gaussian(nz, lz)**2
+        maskz = np.roll(maskz, [int(nz / 2), 0])
+        if lx > 0:
+            maskx = gaussian(nx, lx)**2
+            maskx = np.roll(maskx, [int(nx / 2), 0])
+            noise *= maskx
+        noise = noise * np.reshape(maskz, [-1, 1])
+
+        noise = np.real(np.fft.ifft2(noise))
+        noise = noise / np.max(noise)
+        if lx == 0:
+            noise = np.stack([noise[:, 0] for _ in range(nx)], 1)
+
+        noises.append(noise)
+
+    return noises
 
 
 if __name__ == '__main__':

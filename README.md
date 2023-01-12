@@ -4,7 +4,7 @@ Generate pseudo-random physical ground models.
 
 This repository is best used in conjunction with [GeoFlow](https://github.com/gfabieno/GeoFlow).
 
-![Sample velocity model](random2D.png)
+![Sample velocity model](https://user-images.githubusercontent.com/28260990/212196489-ee44ffd6-e698-4963-89c1-88ba7fb1d404.png)
 
 
 ## Installation

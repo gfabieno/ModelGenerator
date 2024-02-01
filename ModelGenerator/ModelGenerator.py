@@ -69,7 +69,7 @@ def random_thicks(nz, thickmin, thickmax, nmin, nlayer,
     :param thickmax: Maximum thickness of a layer in grid point
     :param nmin: Minimum number of layers
     :param nlayer: The number of layers to create. If 0, draws a ramdom
-                        number of layers
+                   number of layers
     :param thick0min: If provided, the first layer thickness is drawn between
                       thick0min and thick0max
     :param thick0max:
@@ -707,9 +707,11 @@ class ModelGenerator:
             stratigraphy = Stratigraphy()
         if thicks is None:
             if boundaries is None:
-                thicks = random_thicks(self.NZ, self.layer_dh_min,
+                thicks = random_thicks(self.NZ,
+                                       self.layer_dh_min,
                                        self.layer_dh_max,
-                                       self.layer_num_min, self.num_layers,
+                                       self.layer_num_min,
+                                       self.num_layers,
                                        thick0min=self.thick0min,
                                        thick0max=self.thick0max)
             else:

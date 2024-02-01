@@ -317,7 +317,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--name",
         type=str,
-        default="model_with_boundaries",
+        default="model_with_texture_trend",
         help="Name of the example to display"
     )
     # Parse the input for training parameters

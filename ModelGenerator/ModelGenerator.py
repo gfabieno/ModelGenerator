@@ -8,7 +8,7 @@ import copy
 
 import numpy as np
 import h5py as h5
-from scipy.signal import gaussian
+from scipy.signal.windows import gaussian
 from prettytable import PrettyTable
 from matplotlib import pyplot as plt
 from matplotlib import animation
@@ -76,6 +76,27 @@ class ModelGenerator:
         self.thick0max = None
         self.layers = None
 
+        self._properties = None
+        self._stratigraphy = None
+
+    @property
+    def properties(self):
+        if self._properties is None:
+            self._stratigraphy, self._properties = self.build_stratigraphy()
+        return self._properties
+
+    @property
+    def stratigraphy(self):
+        if self._stratigraphy is None:
+            self._stratigraphy, self._properties = self.build_stratigraphy()
+        return self._stratigraphy
+
+    #setter to stratigraphy
+    @stratigraphy.setter
+    def stratigraphy(self, value):
+        self._stratigraphy = value
+        self._properties = self._stratigraphy.properties()
+
     def save_parameters_to_disk(self, filename):
         """
         Save all parameters to disk.
@@ -99,7 +120,7 @@ class ModelGenerator:
                 except KeyError:
                     pass
 
-    def generate_model(self, stratigraphy, thicks=None, dips=None,
+    def generate_model(self, stratigraphy=None, thicks=None, dips=None,
                        boundaries=None, gradxs=None, texture_trends=None,
                        seed=None):
         """
@@ -124,6 +145,11 @@ class ModelGenerator:
             layerids: A 2D array containing layer ids
             layers: A list of Layer objects
         """
+        if stratigraphy is None:
+            stratigraphy = self.stratigraphy
+        else:
+            self.stratigraphy = stratigraphy
+
         if seed is not None:
             np.random.seed(seed)
 
@@ -168,6 +194,20 @@ class ModelGenerator:
         names = [prop.name for prop in layers[0].lithology]
         propdict = {name: prop for name, prop in zip(names, props2d)}
         return propdict, layerids, layers
+
+    def build_stratigraphy(self):
+        """
+        Build the stratigraphy object that controls model creation.
+
+        :returns:
+            strati: A `Stratigraphy` object.
+            properties: A dict of properties with key-values pairs `name:
+                        [vmin, vmax]` where `vmin` and `vmax` are the minimum
+                        and maximum values that can take a property. Each
+                        property returned by generate model should be found in
+                        this dictionary.
+        """
+        raise NotImplementedError("This method should be implemented in a subclass.")
 
     def plot_model(self, props2d, layers, animated=False, figsize=(16, 8)):
         """
@@ -790,7 +830,7 @@ def random_thicks(nz, thickmin, thickmax, nmin, nlayer,
         nlayer = int(np.clip(nlayer, nlmin, nlmax))
 
     thicks = np.random.uniform(thickmin, thickmax,
-                               size=[nlayer]).astype(np.int)
+                               size=[nlayer]).astype(int)
 
     if thick0max is not None and thick0min is not None:
         thicks[0] = np.random.uniform(thick0min, thick0max)
@@ -834,13 +874,13 @@ def generate_random_boundaries(nx, layers):
     """
     top = layers[0].thick
     seq = layers[0].sequence
-    de = np.zeros(nx, dtype=np.int)
+    de = np.zeros(nx, dtype=int)
     for layer in layers[1:]:
         if layer.boundary is None:
             boundary = top
             theta = layer.dip / 360 * 2 * np.pi
             boundary += np.array([int(np.tan(theta) * (jj - nx / 2))
-                                  for jj in range(nx)], dtype=np.int)
+                                  for jj in range(nx)], dtype=int)
             if layer.sequence != seq:
                 prob = 1
                 seq = layer.sequence
@@ -848,10 +888,10 @@ def generate_random_boundaries(nx, layers):
                 prob = np.random.rand()
             if seq.deform is not None and prob < seq.deform.prob_deform_change:
                 if seq.deform.cumulative:
-                    de += seq.deform.create_deformation(nx).astype(np.int)
+                    de += seq.deform.create_deformation(nx).astype(int)
                 else:
                     de = seq.deform.create_deformation(nx)
-            boundary += de.astype(np.int)
+            boundary += de.astype(int)
             boundary = np.clip(boundary, 0, None)
             layer.boundary = boundary
             top += layer.thick
